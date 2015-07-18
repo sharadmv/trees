@@ -1,11 +1,13 @@
+import logging
 import scipy.stats as stats
 import numpy as np
+from tqdm import tqdm
 
 class GibbsSampler(object):
 
-    def __init__(self, tssb, parameters, X):
+    def __init__(self, tssb, parameter_process, X):
         self.tssb = tssb
-        self.parameters = parameters
+        self.parameter_process = parameter_process
         self.X = X
         self.N, self.D = self.X.shape
 
@@ -15,9 +17,44 @@ class GibbsSampler(object):
             self.tssb.add_point(i, index)
 
     def log_likelihood(self, i):
-        return self.parameters.log_likelihood(self.X[i], self.tssb.points[i])
+        return self.parameter_process.log_likelihood(self.X[i], self.tssb[self.tssb.points[i]].parameter)
+
+    def sample_assignments(self):
+        idx = np.arange(self.N)
+        np.random.shuffle(idx)
+        for i in tqdm(idx):
+            self.sample_assignment(i)
+
+    def sample_parameters(self):
+        for index in tqdm(self.tssb.nodes):
+            self.sample_parameter(index)
+
+    def gibbs_sample(self):
+        logging.info("Starting Gibbs sampling iteration...")
+        logging.info("Sampling assignments...")
+        self.sample_assignments()
+        logging.info("Sampling stick sizes...")
+        self.sample_sticks()
+        logging.info("Applying size-biased permutation...")
+        self.size_biased_permutation()
+        logging.info("Sampling parameters...")
+        self.sample_parameters()
+
+    def sample_parameter(self, index):
+        assert index in self.tssb.nodes
+        node = self.tssb[index]
+        data = list(node.points)
+        parent = None
+        if index != ():
+            parent = self.tssb[index[:-1]].parameter
+        children = []
+        for child in node.children:
+            children.append(self.tssb[index + (child,)].parameter)
+        children = np.array(children)
+        node.parameter = self.parameter_process.sample_posterior(self.X[data], children, parent)
 
     def sample_assignment(self, i):
+        assert self.tssb.points[i] in self.tssb.nodes, '%u' % i
         log_likelihood = np.exp(self.log_likelihood(i))
         old_assignment = self.tssb.points[i]
         self.tssb.remove_point(i)
@@ -29,7 +66,7 @@ class GibbsSampler(object):
         while assignment is None:
             u = np.random.uniform(low=u_min, high=u_max)
             e, updates = self.tssb.uniform_index(u, return_updates=True)
-            p = self.parameters.log_likelihood(self.X[i], e)
+            p = self.parameter_process.log_likelihood(self.X[i], updates[e].parameter)
 
             if p > p_slice:
                 assignment = e

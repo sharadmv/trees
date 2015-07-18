@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import scipy.stats as stats
 
@@ -30,6 +31,10 @@ class TSSB(Distribution):
         else:
             node = self.generate_node(index)
         node_updates = {index: node}
+        if len(index) > 5:
+            if return_updates:
+                return index, node_updates
+            return index
         if u < node.nu:
             if return_updates:
                 return index, node_updates
@@ -57,6 +62,7 @@ class TSSB(Distribution):
 
     def add_point(self, i, index):
         assert i not in self.points
+        logging.debug("Adding point %u to %s" % (i, str(index)))
         for n, next in self.path_iterator(index):
             node = self.get_node(n)
             node.add_descendent(i, next[-1])
@@ -87,6 +93,12 @@ class TSSB(Distribution):
             to = index + (i,)
             fro = index + (o,)
 
+            if to in self.nodes:
+                for point in self.nodes[to].points:
+                    logging.info("Updating %u from %s to %s" % (point, to, fro))
+                    self.points[point] = fro
+                    logging.info("Updated %u to %s" % (point, str(self.points[point])))
+
 
             if i in node.psi:
                 psi[o] = node.psi[i]
@@ -112,15 +124,17 @@ class TSSB(Distribution):
         node.psi = psi
         node.children = children
         self.nodes = nodes
+        print self.points
 
 
     def remove_point(self, i):
-        assert i in self.points
+        assert i in self.points, "%u not in points" % i
         index = self.points[i]
+        logging.debug("Removing point %u from %s" % (i, str(index)))
         for n, next in self.path_iterator(index):
             node = self.get_node(n)
             node.remove_descendent(i, next[-1])
-            if node.path_count == 0:
+            if node.path_count == 0 and node.point_count == 0:
                 del self.nodes[n]
         final_node = self.get_node(index)
         final_node.remove_point(i)
@@ -155,6 +169,7 @@ class Node(object):
         self.max_child = -1
         self.points = set()
         self.children = {}
+        self.parameter = self.parameter_process.generate()
 
     def add_descendent(self, i, index):
         for ind in xrange(index + 1):
@@ -200,19 +215,20 @@ class Node(object):
         self.path_count -= 1
         if index == self.max_child and len(self.children[index]) == 0:
             del self.psi[index]
-            del self.children[index]
             if self.path_count > 0:
                 self.max_child = max(self.psi.keys())
                 for ind in self.psi:
                     if ind > self.max_child:
                         del self.psi[index]
+        if not self.children[index]:
+            del self.children[index]
 
     def add_point(self, i):
         self.points.add(i)
         self.point_count += 1
 
     def remove_point(self, i):
-        assert i in self.points
+        assert i in self.points, "%u not in node's points" % i
 
         self.points.remove(i)
         self.point_count -= 1
