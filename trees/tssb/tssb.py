@@ -10,153 +10,46 @@ class TSSB(Distribution):
 
     def __init__(self, parameter_process, *args, **kwargs):
         super(TSSB, self).__init__(*args, **kwargs)
-        self.nodes = {}
-        self.points = {}
         self.parameter_process = parameter_process
+        self.root = None
 
     def generate_node(self, index):
         alpha, gamma = self.get_parameter("alpha"), self.get_parameter("gamma")
-        node = Node(alpha(len(index)), gamma, self.parameter_process)
+        node = Node(self, index, alpha(len(index)), gamma, self.parameter_process)
         return node
+
+    def generate_root(self):
+        if self.root is None:
+            self.root = self.generate_node(())
+        return self.root
+
+    def get_node(self, index):
+        assert self.root is not None, "No nodes exist"
+        return self.root.get_node(index)
 
     def sample_one(self, return_updates=False):
         return self.uniform_index(np.random.random(), return_updates=return_updates)
 
-    def uniform_index(self, u, return_updates=False):
-        return self.find_node(u, (), return_updates=return_updates)
-
-    def find_node(self, u, index, return_updates=False):
-        if index in self.nodes:
-            node = self.nodes[index].copy()
-        else:
-            node = self.generate_node(index)
-        node_updates = {index: node}
-        if len(index) > 5:
-            if return_updates:
-                return index, node_updates
-            return index
-        if u < node.nu:
-            if return_updates:
-                return index, node_updates
-            else:
-                return index
-        u = (u - node.nu) / (1 - node.nu)
-        child, u = node.uniform_index(u)
-        if return_updates:
-            index, updates = self.find_node(u, index + (child,), return_updates=return_updates)
-            node_updates.update(updates)
-        else:
-            index = self.find_node(u, index + (child,), return_updates)
-        if return_updates:
-            return index, node_updates
-        else:
-            return index
-
-    def apply_node_updates(self, updates):
-        self.nodes.update(updates)
-
-    def get_node(self, index):
-        if index not in self.nodes:
-            self.nodes[index] = self.generate_node(index)
-        return self.nodes[index]
-
     def add_point(self, i, index):
-        assert i not in self.points
-        logging.debug("Adding point %u to %s" % (i, str(index)))
-        for n, next in self.path_iterator(index):
-            node = self.get_node(n)
-            node.add_descendent(i, next[-1])
-        final_node = self.get_node(index)
-        final_node.add_point(i)
-        self.points[i] = index
-
-    def size_biased_permutation(self, index):
-        assert index in self.nodes
-        node = self.get_node(index)
-        if len(node.psi) <= 1:
-            return
-
-        labels, weights = zip(*node.psi.items())
-
-        weights = np.array(weights)
-
-        permutation = []
-        while len(permutation) < len(labels):
-            o = np.random.choice(labels, p=weights/np.sum(weights))
-            weights[o] = 0
-            permutation.append(o)
-
-        nodes = {}
-        psi, children = {}, {}
-        for i, o in enumerate(permutation):
-
-            to = index + (i,)
-            fro = index + (o,)
-
-            if to in self.nodes:
-                for point in self.nodes[to].points:
-                    logging.info("Updating %u from %s to %s" % (point, to, fro))
-                    self.points[point] = fro
-                    logging.info("Updated %u to %s" % (point, str(self.points[point])))
-
-
-            if i in node.psi:
-                psi[o] = node.psi[i]
-
-            if i in node.children:
-                children[o] = node.children[i]
-
-            for n in self.nodes:
-                if len(n) < len(index):
-                    nodes[n] = self.nodes[n]
-                    continue
-                left, right = n[:len(index)], n[len(index):]
-                if left != index:
-                    nodes[n] = self.nodes[n]
-                    continue
-                if len(n) < len(to):
-                    nodes[n] = self.nodes[n]
-                    continue
-                left, right = n[:len(to)], n[len(to):]
-                if left == to:
-                    nodes[fro + right] = self.nodes[n]
-
-        node.psi = psi
-        node.children = children
-        self.nodes = nodes
-        print self.points
-
+        self.generate_root().add_point(i, index)
 
     def remove_point(self, i):
-        assert i in self.points, "%u not in points" % i
-        index = self.points[i]
-        logging.debug("Removing point %u from %s" % (i, str(index)))
-        for n, next in self.path_iterator(index):
-            node = self.get_node(n)
-            node.remove_descendent(i, next[-1])
-            if node.path_count == 0 and node.point_count == 0:
-                del self.nodes[n]
-        final_node = self.get_node(index)
-        final_node.remove_point(i)
-        if final_node.path_count == 0 and final_node.point_count == 0:
-            del self.nodes[index]
-        del self.points[i]
+        assert self.root is not None, "Root must exits"
+        self.root.remove_point(i)
+        if self.root.is_dead():
+            self.root = None
 
-    def path_iterator(self, index):
-        node = ()
-        for i in index:
-            yield node, node + (i,)
-            node += (i, )
+    def uniform_index(self, u, return_updates=False):
+        return self.find_node(u, self.root, return_updates=return_updates)
 
     def parameters(self):
         return {"alpha", "gamma"}
 
-    def __getitem__(self, key):
-        return self.nodes[key]
-
 class Node(object):
 
-    def __init__(self, alpha, gamma, parameter_process):
+    def __init__(self, tssb, index, alpha, gamma, parameter_process):
+        self.tssb = tssb
+        self.index = index
         self.alpha = alpha
         self.gamma = gamma
         self.parameter_process = parameter_process
@@ -166,20 +59,28 @@ class Node(object):
 
         self.nu = stats.beta(1, self.alpha).rvs()
         self.psi = {}
+
         self.max_child = -1
         self.points = set()
         self.children = {}
+        self.descendent_points = set()
         self.parameter = self.parameter_process.generate()
 
-    def add_descendent(self, i, index):
-        for ind in xrange(index + 1):
-            if ind not in self.psi:
-                self.psi[ind] = stats.beta(1, self.gamma).rvs()
-        if index not in self.children:
-            self.children[index] = set()
-        self.children[index].add(i)
-        self.max_child = max(self.psi.keys())
-        self.path_count += 1
+    def get_node(self, index):
+        if index == ():
+            return self
+        child, rest = index[0], index[1:]
+        assert child in self.children
+        return self.children[child].get_node(rest)
+
+    def generate_child(self, c):
+        if c not in self.children:
+            self.children[c] = self.tssb.generate_node(self.index + (c,))
+        return self.children[c]
+
+    def remove_child(self, c):
+        assert self.children[c].is_dead(), 'Cannot remove undead child'
+        del self.children[c]
 
     def uniform_index(self, u):
         s = 0
@@ -197,41 +98,38 @@ class Node(object):
             upper_edge = s
         return i, (u - lower_edge) / (upper_edge - lower_edge)
 
-    def copy(self):
-        node = Node(self.alpha, self.gamma, self.parameter_process)
-        node.path_count = self.path_count
-        node.point_count = self.point_count
-        node.nu = self.nu
-        node.max_child = self.max_child
-        node.points = self.points.copy()
-        node.psi = self.psi.copy()
-        node.children = self.children.copy()
-        return node
-
-    def remove_descendent(self, i, index):
-        assert index in self.psi
-        assert index in self.children
-        self.children[index].remove(i)
-        self.path_count -= 1
-        if index == self.max_child and len(self.children[index]) == 0:
-            del self.psi[index]
-            if self.path_count > 0:
-                self.max_child = max(self.psi.keys())
-                for ind in self.psi:
-                    if ind > self.max_child:
-                        del self.psi[index]
-        if not self.children[index]:
-            del self.children[index]
-
-    def add_point(self, i):
-        self.points.add(i)
-        self.point_count += 1
+    def add_point(self, i, index):
+        if index == ():
+            assert i not in self.points, "%u already in node's points" % i
+            self.points.add(i)
+            self.point_count += 1
+        else:
+            assert i not in self.descendent_points, "%u already in node's descendent points" % i
+            child, rest = index[0], index[1:]
+            self.generate_child(child).add_point(i, rest)
+            self.descendent_points.add(i)
+            self.path_count += 1
 
     def remove_point(self, i):
-        assert i in self.points, "%u not in node's points" % i
+        if i not in self.points and i not in self.descendent_points:
+            return
+        if i in self.points:
+            self.points.remove(i)
+            self.point_count -= 1
+        else:
+            assert i in self.descendent_points, "%u not in node's descendent points" % i
+            for child, child_node in self.children.items():
+                child_node.remove_point(i)
+                if child_node.is_dead():
+                    self.remove_child(child)
+            self.descendent_points.remove(i)
+            self.path_count -= 1
 
-        self.points.remove(i)
-        self.point_count -= 1
+    def is_dead(self):
+        return self.path_count == 0 and self.point_count == 0
+
+    def num_children(self):
+        return len(self.children)
 
     def __repr__(self):
         return "Node<%f, %u, %u>" % (self.nu, self.point_count, self.path_count)
