@@ -13,11 +13,13 @@ class GibbsSampler(object):
 
     def initialize_assignments(self):
         for i in xrange(self.N):
-            index = self.tssb.sample_one()
+            _, index = self.tssb.sample_one()
             self.tssb.add_point(i, index)
+        self.tssb.garbage_collect()
 
-    def log_likelihood(self, i):
-        return self.parameter_process.log_likelihood(self.X[i], self.tssb[self.tssb.points[i]].parameter)
+    def log_likelihood(self, i, parameter):
+        return self.parameter_process.log_likelihood(self.X[i], parameter)
+
 
     def sample_assignments(self):
         idx = np.arange(self.N)
@@ -26,8 +28,8 @@ class GibbsSampler(object):
             self.sample_assignment(i)
 
     def sample_parameters(self):
-        for index in tqdm(self.tssb.nodes):
-            self.sample_parameter(index)
+        for node in self.tssb.dfs():
+            self.sample_parameter(node)
 
     def gibbs_sample(self):
         logging.info("Starting Gibbs sampling iteration...")
@@ -40,23 +42,23 @@ class GibbsSampler(object):
         logging.info("Sampling parameters...")
         self.sample_parameters()
 
-    def sample_parameter(self, index):
-        assert index in self.tssb.nodes
-        node = self.tssb[index]
+    def sample_parameter(self, node):
         data = list(node.points)
         parent = None
-        if index != ():
-            parent = self.tssb[index[:-1]].parameter
+        if node != self.tssb.root:
+            parent = node.parent.parameter
         children = []
-        for child in node.children:
-            children.append(self.tssb[index + (child,)].parameter)
+        for _, child_node in node.children.items():
+            children.append(child_node.parameter)
         children = np.array(children)
         node.parameter = self.parameter_process.sample_posterior(self.X[data], children, parent)
 
+
     def sample_assignment(self, i):
-        assert self.tssb.points[i] in self.tssb.nodes, '%u' % i
-        log_likelihood = np.exp(self.log_likelihood(i))
-        old_assignment = self.tssb.points[i]
+        logging.info("Sampling assignment for %u" % i)
+        node, index = self.tssb.point_index(i)
+        log_likelihood = np.exp(self.log_likelihood(i, node.parameter))
+        old_assignment = index
         self.tssb.remove_point(i)
         p_slice = np.log(np.random.uniform(low=0, high=log_likelihood))
         u_min, u_max = 0, 1
@@ -64,31 +66,38 @@ class GibbsSampler(object):
         assignment = None
 
         while assignment is None:
+
+            if np.isclose(u_min, u_max):
+                assignment = index
+                continue
+
             u = np.random.uniform(low=u_min, high=u_max)
-            e, updates = self.tssb.uniform_index(u, return_updates=True)
-            p = self.parameter_process.log_likelihood(self.X[i], updates[e].parameter)
+            candidate_node, candidate_index = self.tssb.uniform_index(u)
+            p = self.log_likelihood(i, candidate_node.parameter)
 
             if p > p_slice:
-                assignment = e
-                self.tssb.apply_node_updates(updates)
-                self.tssb.add_point(i, assignment)
-            elif e < old_assignment:
+                assignment = candidate_index
+            elif candidate_index < old_assignment:
                 u_min = u
             else:
                 u_max = u
+        self.tssb.garbage_collect()
+        self.tssb.add_point(i, assignment)
         return assignment
 
+
     def size_biased_permutation(self):
-        indices = sorted(self.tssb.nodes.keys(), key=lambda x: len(x))[::-1]
-        for index in indices:
-            self.tssb.size_biased_permutation(index)
+        nodes = list(self.tssb.dfs())
+        for node in nodes:
+            node.size_biased_permutation()
+
 
     def sample_sticks(self):
-        for index, node in self.tssb.nodes.items():
+        for node in self.tssb.dfs():
             node.nu = stats.beta(node.point_count + 1, node.path_count + node.alpha).rvs()
             children = sorted(list(node.children.keys()))[::-1]
             count = 0
             for i in children:
-                child = self.tssb[index + (i,)]
+                child = node.children[i]
                 node.psi[i] = stats.beta(child.path_count + 1, count + node.gamma).rvs()
                 count += child.path_count

@@ -1,5 +1,5 @@
 import numpy as np
-from trees.tssb import *
+from trees.tssb import TSSB, GaussianParameterProcess, depth_weight
 import unittest
 
 class TestAddRemove(unittest.TestCase):
@@ -105,6 +105,43 @@ class TestAddRemove(unittest.TestCase):
         self.assertEquals(tssb.root.path_count, 1)
 
         tssb.remove_point(1)
+        self.assertEquals(tssb.root, None)
+
+    def test_add_psi(self):
+        tssb = self.get_tssb()
+        tssb.add_point(0, ())
+
+        self.assertEquals(tssb.root.psi, {})
+
+        tssb.add_point(1, (0, ))
+
+        self.assertEquals(set(tssb.root.psi.keys()), {0})
+
+        tssb.add_point(2, (1, ))
+
+        self.assertEquals(set(tssb.root.psi.keys()), {0, 1})
+
+        tssb.add_point(3, (9, ))
+
+        self.assertEquals(set(tssb.root.psi.keys()), set(range(10)))
+
+
+    def test_add_remove_psi(self):
+        tssb = self.get_tssb()
+
+        tssb.add_point(0, (0, ))
+        tssb.add_point(1, (1, ))
+
+        tssb.add_point(2, (9, ))
+        self.assertEquals(set(tssb.root.psi.keys()), set(range(10)))
+
+        tssb.remove_point(1)
+        self.assertEquals(set(tssb.root.psi.keys()), set(range(10)))
+
+        tssb.remove_point(2)
+        self.assertEquals(set(tssb.root.psi.keys()), {0})
+
+        tssb.remove_point(0)
         self.assertEquals(tssb.root, None)
 
 if __name__ == "__main__":

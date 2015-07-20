@@ -7,7 +7,7 @@ def plot_tssb(tssb):
     add_nodes(g, tssb.root)
 
     pos = nx.graphviz_layout(g, prog='dot', args='-Granksep=100.0')
-    labels = {n: tssb.get_node(n).point_count for n in g.nodes()}
+    labels = {n: n.point_count for n in g.nodes()}
     nx.draw_networkx_nodes(g, pos,
                             node_color='b',
                             node_size=300,
@@ -18,5 +18,5 @@ def plot_tssb(tssb):
 
 def add_nodes(g, node):
     for c, child_node in node.children.items():
-        g.add_edge(node.index, child_node.index)
+        g.add_edge(node, child_node)
         add_nodes(g, child_node)
