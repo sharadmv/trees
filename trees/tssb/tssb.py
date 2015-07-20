@@ -24,8 +24,12 @@ class TSSB(Distribution):
             self.root = self.generate_node(0, None)
         return self.root
 
-    def marg_log_likelihood(self):
-        pass
+    def marg_log_likelihood(self, X):
+        log_likelihood = 0
+        for node in self.dfs():
+            for point in node.points:
+                log_likelihood += self.parameter_process.data_log_likelihood(X[point], node.parameter)
+        return log_likelihood
 
     def get_node(self, index):
         assert self.root is not None, "No nodes exist"
@@ -75,10 +79,10 @@ class TSSB(Distribution):
     def __getitem__(self, index):
         return self.get_node(index)
 
-    def parameters(self):
+    def get_parameters(self):
         return {"alpha", "gamma"}
 
-class Node(object):
+class Node(Distribution):
 
     def __init__(self, tssb, parent, depth, alpha, gamma, parameter_process):
         self.tssb = tssb
@@ -98,7 +102,10 @@ class Node(object):
         self.points = set()
         self.children = {}
         self.descendent_points = set()
-        self.parameter = self.parameter_process.generate()
+        if parent is not None:
+            self.parameter = self.parameter_process.generate(parameter=parent.parameter)
+        else:
+            self.parameter = self.parameter_process.generate()
 
     def get_node(self, index):
         if index == ():
@@ -106,6 +113,9 @@ class Node(object):
         child, rest = index[0], index[1:]
         assert child in self.children
         return self.children[child].get_node(rest)
+
+    def sample_one(self):
+        return self.parameter_process.sample_one(self.parameter)
 
     def point_index(self, i, index):
         if i in self.points:

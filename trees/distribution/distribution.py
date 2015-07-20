@@ -4,7 +4,7 @@ class Distribution(object):
 
     def __init__(self, parameters={}, seed=None):
         np.random.seed(seed)
-        for parameter_name in self.parameters():
+        for parameter_name in self.get_parameters():
             assert parameter_name in parameters, "Parameter<%s> not provided." % parameter_name
 
         self.parameters = parameters
@@ -21,5 +21,5 @@ class Distribution(object):
     def sample(self, n_samples):
         return [self.sample_one() for _ in xrange(n_samples)]
 
-    def parameters(self):
+    def get_parameters(self):
         raise NotImplementedError

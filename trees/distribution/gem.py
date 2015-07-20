@@ -24,7 +24,7 @@ class GEM(Distribution):
     def get_weight(self, index):
         raise NotImplementedError
 
-    def parameters(self):
+    def get_parameters(self):
         return {"a"}
 
 class TruncatedGEM(GEM):
@@ -50,7 +50,7 @@ class TruncatedGEM(GEM):
             raise Exception("index desired greater than max_length, %u" % max_length)
         return self.weights[index]
 
-    def parameters(self):
+    def get_parameters(self):
         return {"a", "max_length"}
 
 class LazyGEM(GEM):

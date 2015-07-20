@@ -33,7 +33,7 @@ class ChineseRestaurantProcess(Distribution):
         probs += alpha
         return probs / float(sum(probs))
 
-    def parameters(self):
+    def get_parameters(self):
         return {"alpha", "N"}
 
 

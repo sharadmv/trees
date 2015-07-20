@@ -18,13 +18,13 @@ class GibbsSampler(object):
         self.tssb.garbage_collect()
 
     def log_likelihood(self, i, parameter):
-        return self.parameter_process.log_likelihood(self.X[i], parameter)
+        return self.parameter_process.data_log_likelihood(self.X[i], parameter)
 
 
     def sample_assignments(self):
         idx = np.arange(self.N)
         np.random.shuffle(idx)
-        for i in tqdm(idx):
+        for i in idx:
             self.sample_assignment(i)
 
     def sample_parameters(self):
@@ -32,14 +32,14 @@ class GibbsSampler(object):
             self.sample_parameter(node)
 
     def gibbs_sample(self):
-        logging.info("Starting Gibbs sampling iteration...")
-        logging.info("Sampling assignments...")
+        logging.debug("Starting Gibbs sampling iteration...")
+        logging.debug("Sampling assignments...")
         self.sample_assignments()
-        logging.info("Sampling stick sizes...")
+        logging.debug("Sampling stick sizes...")
         self.sample_sticks()
-        logging.info("Applying size-biased permutation...")
+        logging.debug("Applying size-biased permutation...")
         self.size_biased_permutation()
-        logging.info("Sampling parameters...")
+        logging.debug("Sampling parameters...")
         self.sample_parameters()
 
     def sample_parameter(self, node):
@@ -55,7 +55,7 @@ class GibbsSampler(object):
 
 
     def sample_assignment(self, i):
-        logging.info("Sampling assignment for %u" % i)
+        logging.debug("Sampling assignment for %u" % i)
         node, index = self.tssb.point_index(i)
         log_likelihood = np.exp(self.log_likelihood(i, node.parameter))
         old_assignment = index
@@ -84,7 +84,6 @@ class GibbsSampler(object):
         self.tssb.garbage_collect()
         self.tssb.add_point(i, assignment)
         return assignment
-
 
     def size_biased_permutation(self):
         nodes = list(self.tssb.dfs())
