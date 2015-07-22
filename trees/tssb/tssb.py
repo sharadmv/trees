@@ -31,6 +31,12 @@ class TSSB(Distribution):
                 log_likelihood += self.parameter_process.data_log_likelihood(X[point], node.parameter)
         return log_likelihood
 
+    def copy(self):
+        tssb = TSSB(self.parameter_process, max_depth=self.max_depth, parameters=self.parameters)
+        if self.root is not None:
+            tssb.root = self.root.copy(None)
+        return tssb
+
     def get_node(self, index):
         assert self.root is not None, "No nodes exist"
         return self.root.get_node(index)
@@ -106,6 +112,26 @@ class Node(Distribution):
             self.parameter = self.parameter_process.generate(parameter=parent.parameter)
         else:
             self.parameter = self.parameter_process.generate()
+
+    def copy(self, parent):
+        node = Node(self.tssb, parent, self.depth, self.alpha, self.gamma, self.parameter_process)
+        node.path_count = self.path_count
+        node.point_count = self.point_count
+
+        node.nu = self.nu
+        node.psi = self.psi.copy()
+
+        node.max_child = self.max_child
+        node.points = self.points.copy()
+        node.descendent_points = self.descendent_points.copy()
+
+        node.parent = parent
+
+        children = {}
+        for child, child_node in self.children.items():
+            children[child] = child_node.copy(self)
+        node.children = children
+        return node
 
     def get_node(self, index):
         if index == ():

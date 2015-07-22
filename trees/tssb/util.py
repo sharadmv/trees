@@ -4,7 +4,7 @@ sns.despine()
 import numpy as np
 import networkx as nx
 
-def plot_tssb(tssb):
+def plot_tssb(tssb, ax=None):
     g = nx.DiGraph()
     assert tssb.root is not None
 
@@ -15,10 +15,10 @@ def plot_tssb(tssb):
     nx.draw_networkx_nodes(g, pos,
                             node_color='b',
                             node_size=300,
-                            alpha=0.8)
+                            alpha=0.8, ax=ax)
     nx.draw_networkx_edges(g, pos,
-                            alpha=0.8, arrows=False)
-    nx.draw_networkx_labels(g, pos, labels, font_size=12, font_color='w')
+                            alpha=0.8, arrows=False, ax=ax)
+    nx.draw_networkx_labels(g, pos, labels, font_size=12, font_color='w', ax=ax)
 
 def add_nodes(g, node):
     for c, child_node in node.children.items():
@@ -38,17 +38,9 @@ def generate_data(N, tssb, collect=True):
 
 def plot_data(X, z, tssb=None):
     nodes = set(z)
-    color_map = sns.light_palette("purple", n_colors=len(nodes), reverse=True)
+    color_map = sns.color_palette("coolwarm", len(set(map(len, nodes))))
     colors = {}
-    for i, n in enumerate(sorted(nodes, key=lambda x: len(x))):
-        colors[n] = color_map[i]
+    for c, n in zip(color_map, set(map(len, nodes))):
+        colors[n] = c
     for i, (x, y) in enumerate(X):
-        plt.scatter(x, y, color=colors[z[i]])
-    if tssb is not None:
-        for node in tssb.dfs():
-            #if node in nodes:
-            (x, y) = node.parameter
-            plt.scatter(x, y, color='r', alpha=0.2)
-            if node.parent is not None:
-                (x2, y2) = node.parent.parameter
-                plt.plot([x2, x], [y2, y], color='r', alpha=0.1)
+        plt.scatter(x, y, color=colors[len(z[i])])
