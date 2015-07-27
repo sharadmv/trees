@@ -1,0 +1,20 @@
+{
+  "name": "trees",
+  "version": "0.0.0",
+  "homepage": "https://github.com/sharadmv/trees",
+  "authors": [
+    "Sharad Vikram <sharad.vikram@gmail.com>"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "trees/server/static",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "bootstrap": "~3.3.5"
+  }
+}

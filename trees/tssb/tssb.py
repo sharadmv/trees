@@ -46,8 +46,8 @@ class TSSB(Distribution):
         assert i in self.root.points or i in self.root.descendent_points, "Point isn't added"
         return self.root.point_index(i, ())
 
-    def sample_one(self):
-        return self.uniform_index(np.random.random())
+    def sample_one(self, point=None):
+        return self.uniform_index(np.random.random(), point=point)
 
     def add_point(self, i, index):
         logging.debug("Adding %i to %s" % (i, str(index)))
@@ -55,14 +55,15 @@ class TSSB(Distribution):
 
     def remove_point(self, i):
         assert self.root is not None, "Root must exist"
+        logging.debug("Removing %i" % i)
         self.root.remove_point(i)
         if self.root.is_dead():
             self.root = None
 
-    def uniform_index(self, u):
-        return self.find_node(u)
+    def uniform_index(self, u, point=None):
+        return self.find_node(u, point=point)
 
-    def find_node(self, u):
+    def find_node(self, u, point=None):
         root = self.generate_root()
         return root.find_node(u, (), max_depth=self.max_depth)
 
@@ -84,6 +85,19 @@ class TSSB(Distribution):
 
     def __getitem__(self, index):
         return self.get_node(index)
+
+    def get_state(self):
+        return {
+            'parameter_process': self.parameter_process,
+            'max_depth': self.max_depth,
+            'root': self.root.get_state()
+        }
+
+    @staticmethod
+    def load(state, parameters):
+        tssb = TSSB(state['parameter_process'], parameters=parameters, max_depth=state['max_depth'])
+        tssb.root = Node.load(tssb, None, state['root'])
+        return tssb
 
     def get_parameters(self):
         return {"alpha", "gamma"}
@@ -252,6 +266,38 @@ class Node(Distribution):
 
     def num_children(self):
         return len(self.children)
+
+    def get_state(self):
+        return {
+            'alpha': self.alpha,
+            'gamma': self.gamma,
+            'nu': self.nu,
+            'psi': self.psi,
+            'points': self.points,
+            'descendent_points': self.descendent_points,
+            'point_count': self.point_count,
+            'path_count': self.path_count,
+            'max_child': self.max_child,
+            'depth': self.depth,
+            'children': {i: v.get_state() for i, v in self.children.items()}
+        }
+
+    def sub_points(self):
+        return self.points | self.descendent_points
+
+    @staticmethod
+    def load(tssb, parent, state):
+        node = Node(tssb, parent, state['depth'], state['alpha'], state['gamma'], tssb.parameter_process)
+
+        node.points = state['points']
+        node.descendent_points = state['descendent_points']
+
+        node.path_count = state['path_count']
+        node.point_count = state['point_count']
+        node.psi = state['psi']
+        node.max_child = state['max_child']
+        node.children = {i: Node.load(tssb, node, v) for i, v in state['children'].items()}
+        return node
 
     def __repr__(self):
         return "Node<%f, %u, %u>" % (self.nu, self.point_count, self.path_count)

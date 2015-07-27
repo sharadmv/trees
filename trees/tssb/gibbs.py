@@ -1,7 +1,6 @@
 import logging
 import scipy.stats as stats
 import numpy as np
-from tqdm import tqdm
 
 class GibbsSampler(object):
 
@@ -13,7 +12,7 @@ class GibbsSampler(object):
 
     def initialize_assignments(self):
         for i in xrange(self.N):
-            _, index = self.tssb.sample_one()
+            _, index = self.tssb.sample_one(point=i)
             self.tssb.add_point(i, index)
         self.tssb.garbage_collect()
 
@@ -72,7 +71,7 @@ class GibbsSampler(object):
                 continue
 
             u = np.random.uniform(low=u_min, high=u_max)
-            candidate_node, candidate_index = self.tssb.uniform_index(u)
+            candidate_node, candidate_index = self.tssb.uniform_index(u, point=i)
             p = self.log_likelihood(i, candidate_node.parameter)
 
             if p > p_slice:
@@ -81,8 +80,8 @@ class GibbsSampler(object):
                 u_min = u
             else:
                 u_max = u
-        self.tssb.garbage_collect()
         self.tssb.add_point(i, assignment)
+        self.tssb.garbage_collect()
         return assignment
 
     def size_biased_permutation(self):

@@ -1,3 +1,4 @@
+import cPickle as pickle
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.despine()
@@ -44,3 +45,12 @@ def plot_data(X, z, tssb=None):
         colors[n] = c
     for i, (x, y) in enumerate(X):
         plt.scatter(x, y, color=colors[len(z[i])])
+
+def save_tssb(tssb, location):
+    with open(location, 'wb') as fp:
+        pickle.dump(tssb.get_state(), fp)
+
+def load_tssb(location):
+    with open(location, 'rb') as fp:
+        tssb = pickle.load(fp)
+    return tssb
