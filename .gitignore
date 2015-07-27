@@ -58,3 +58,5 @@ target/
 
 # virtualenv
 venv/
+
+trees/server/static/lib
