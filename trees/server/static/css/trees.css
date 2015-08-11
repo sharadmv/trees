@@ -1,0 +1,12 @@
+g.mpld3-xaxis, g.mpld3-yaxis {
+  display: none;
+}
+.tree-label {
+    background-color: #eee;
+    padding: 5px 5px 5px 5px;
+    border-radius: 4px;
+}
+.tree-label-text {
+    font-family: 'Helvetica Neue'
+    font-size: 11px;
+}

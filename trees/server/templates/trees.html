@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+{% set active_page = "trees" %}
+{% block body %}
+  <script src='/js/trees.js'></script>
+  <script src='/lib/mpld3/d3.v3.min.js'></script>
+  <script src='/lib/mpld3/mpld3.v0.2.min.js'></script>
+  <link href="/css/trees.css" rel="stylesheet"/>
+  <div class="row">
+    <div class='col-lg-6'>
+      <label>TSSB</label>
+      <div id='tssb'></div>
+    </div>
+    <div class='col-lg-6'>
+      <label>iTSSB</label>
+      <div id='itssb'></div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,3 +1,4 @@
+import numpy as np
 import logging
 from tssb import TSSB, Node
 
@@ -6,29 +7,55 @@ class InteractiveTSSB(TSSB):
     def __init__(self, parameter_process, max_depth=20, constraints=[], *args, **kwargs):
         super(InteractiveTSSB, self).__init__(parameter_process, max_depth=max_depth, *args, **kwargs)
         self.constraints = {}
-        for (a, b, c) in constraints:
-            if a not in self.constraints:
-                self.constraints[a] = []
-            if b not in self.constraints:
-                self.constraints[b] = []
-            if c not in self.constraints:
-                self.constraints[c] = []
-            self.constraints[a].append((b, c, True))
-            self.constraints[b].append((a, c, True))
-            self.constraints[c].append((a, b, False))
+        for constraint in constraints:
+            self.add_constraint(constraint)
 
     def get_constraints(self, point):
         return self.constraints[point]
 
-    def find_node(self, u, point=None):
+    def add_constraint(self, constraint):
+        a, b, c = constraint
+        if a not in self.constraints:
+            self.constraints[a] = []
+        if b not in self.constraints:
+            self.constraints[b] = []
+        if c not in self.constraints:
+            self.constraints[c] = []
+        if (b, c, True) not in self.constraints[a]:
+            self.constraints[a].append((b, c, True))
+        if (a, c, True) not in self.constraints[b]:
+            self.constraints[b].append((a, c, True))
+        if (a, b, False) not in self.constraints[c]:
+            self.constraints[c].append((a, b, False))
+
+    def sample_one(self, point=None):
+        return self.uniform_index(np.random.random(), point=point, use_constraints=True)
+
+    def uniform_index(self, u, point=None, use_constraints=True):
+        return self.find_node(u, point=point, use_constraints=use_constraints)
+
+
+    def find_node(self, u, point=None, use_constraints=True):
         assert point is not None, "Must supply point for sampling in itssb"
         root = self.generate_root()
         constraints = self.constraints.get(point, [])
-        logging.debug("Using constraints for point %u: %s" % (point, str(constraints)))
+        if not use_constraints:
+            constraints = []
         logging.debug("Banned root: %s"% str(root.is_banned(constraints)))
-        if root.is_banned(constraints)[0]:
-            logging.debug("Root is banned.")
-            return root, ()
+        sub_points = self.root.sub_points()
+        new_constraints = []
+        for constraint in constraints:
+            a, b, pos = constraint
+            if not pos:
+                if a not in sub_points or b not in sub_points:
+                    continue
+            new_constraints.append(constraint)
+        constraints = new_constraints
+        banned, constraints = root.is_banned(constraints)
+        required, constraints = root.is_required(constraints)
+        if banned and not required:
+            logging.info("Point %u is banned from tree." % point)
+            return None, None
         return root.find_node(u, (), constraints=constraints, max_depth=self.max_depth)
 
     def generate_node(self, depth, parent):
@@ -45,7 +72,6 @@ class InteractiveTSSB(TSSB):
             'root': self.root.get_state()
         }
 
-
     @staticmethod
     def load(state, parameters):
         tssb = InteractiveTSSB(state['parameter_process'], parameters=parameters, max_depth=state['max_depth'])
@@ -60,10 +86,15 @@ class InteractiveNode(Node):
 
     def find_node(self, u, index, constraints=[], max_depth=20):
         logging.debug("Trying node %s" % str(index))
-        if (u < self.nu or len(index) == max_depth):
+        required_children = set()
+        for child_index, child_node in self.children.items():
+            required , constraints = child_node.is_required(constraints)
+            if required:
+                required_children.add(child_index)
+        if len(required_children) == 0 and (u < self.nu or len(index) == max_depth):
             return self, index
         u = (u - self.nu) / (1 - self.nu)
-        c, u, new_constraints = self.uniform_index(u, constraints=constraints)
+        c, u, new_constraints = self.uniform_index(u, constraints=constraints, required_children=required_children)
         return self.children[c].find_node(u, index + (c,), constraints=new_constraints, max_depth=max_depth)
 
     @staticmethod
@@ -80,7 +111,7 @@ class InteractiveNode(Node):
         node.children = {i: InteractiveNode.load(tssb, node, v) for i, v in state['children'].items()}
         return node
 
-    def uniform_index(self, u, constraints=[]):
+    def uniform_index(self, u, constraints=[], required_children=set()):
         s = 0
         p = 1
         i = -1
@@ -91,6 +122,10 @@ class InteractiveNode(Node):
             banned, constraints = child_node.is_banned(constraints)
             if banned:
                 banned_children.add(child_index)
+
+        if len(required_children) > 0:
+            logging.debug("Picking required child: %s, %s" % (list(required_children), constraints))
+            return list(required_children)[0], u, constraints
 
         while u > s:
             lower_edge = upper_edge
@@ -139,7 +174,7 @@ class InteractiveNode(Node):
                 new_constraints.append(constraint)
         return banned, new_constraints
 
-    def is_required(self,constraints):
+    def is_required(self, constraints):
         sub_points = self.sub_points()
         new_constraints = []
         required = False

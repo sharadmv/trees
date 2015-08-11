@@ -1,25 +1,26 @@
 import cPickle as pickle
 import matplotlib.pyplot as plt
-import seaborn as sns
-sns.despine()
 import numpy as np
 import networkx as nx
 
 def plot_tssb(tssb, ax=None):
     g = nx.DiGraph()
+    if ax:
+        ax.set_axis_off()
     assert tssb.root is not None
 
     add_nodes(g, tssb.root)
 
     pos = nx.graphviz_layout(g, prog='dot', args='-Granksep=100.0')
     labels = {n: n.point_count for n in g.nodes()}
-    nx.draw_networkx_nodes(g, pos,
+    nodes = nx.draw_networkx_nodes(g, pos,
                             node_color='b',
                             node_size=300,
                             alpha=0.8, ax=ax)
     nx.draw_networkx_edges(g, pos,
                             alpha=0.8, arrows=False, ax=ax)
-    nx.draw_networkx_labels(g, pos, labels, font_size=12, font_color='w', ax=ax)
+    labels = nx.draw_networkx_labels(g, pos, labels, font_size=12, font_color='w', ax=ax)
+    return g, nodes, labels
 
 def add_nodes(g, node):
     for c, child_node in node.children.items():
@@ -54,3 +55,11 @@ def load_tssb(location):
     with open(location, 'rb') as fp:
         tssb = pickle.load(fp)
     return tssb
+
+def print_tssb(t, y, N):
+    points = xrange(N)
+    nodes = set([t.point_index(point)[1] for point in points])
+    assignments = {}
+    for node in nodes:
+        assignments[node] = [y[p] for p in t.get_node(node).points]
+    return assignments

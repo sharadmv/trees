@@ -7,7 +7,7 @@ setup(
     author_email = "sharad.vikram@gmail.com",
     entry_points = {
         'console_scripts' : [
-            'interactive_server=trees.server.server:main'
+            'interactive_server=trees.server:main'
         ],
     },
     packages=[

@@ -12,8 +12,9 @@ class GibbsSampler(object):
 
     def initialize_assignments(self):
         for i in xrange(self.N):
-            _, index = self.tssb.sample_one(point=i)
-            self.tssb.add_point(i, index)
+            node, index = self.tssb.sample_one(point=i)
+            if node is not None:
+                self.tssb.add_point(i, index)
         self.tssb.garbage_collect()
 
     def log_likelihood(self, i, parameter):
@@ -55,6 +56,14 @@ class GibbsSampler(object):
 
     def sample_assignment(self, i):
         logging.debug("Sampling assignment for %u" % i)
+        if i not in self.tssb.root.sub_points():
+            node, index = self.tssb.sample_one(point=i)
+            if node is not None:
+                self.tssb.add_point(i, index)
+                self.tssb.garbage_collect()
+                return index
+            self.tssb.garbage_collect()
+            return
         node, index = self.tssb.point_index(i)
         log_likelihood = np.exp(self.log_likelihood(i, node.parameter))
         old_assignment = index
@@ -65,6 +74,7 @@ class GibbsSampler(object):
         assignment = None
 
         while assignment is None:
+            logging.debug("Restarting with bounds [%f, %f]" % (u_min, u_max))
 
             if np.isclose(u_min, u_max):
                 assignment = index
@@ -72,6 +82,9 @@ class GibbsSampler(object):
 
             u = np.random.uniform(low=u_min, high=u_max)
             candidate_node, candidate_index = self.tssb.uniform_index(u, point=i)
+            if candidate_node is None:
+                self.tssb.garbage_collect()
+                return
             p = self.log_likelihood(i, candidate_node.parameter)
 
             if p > p_slice:
@@ -81,7 +94,11 @@ class GibbsSampler(object):
             else:
                 u_max = u
         self.tssb.add_point(i, assignment)
+        if 'constraints' in self.tssb.__dict__:
+            if i in self.tssb.constraints and len(self.tssb.constraints[i]) > 0:
+                logging.info("Assigned %u to %s, %s" % (i, str(assignment), self.tssb.constraints[i]))
         self.tssb.garbage_collect()
+
         return assignment
 
     def size_biased_permutation(self):
