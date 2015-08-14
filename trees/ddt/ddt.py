@@ -4,9 +4,11 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import random
-from node import NonTerminal, Leaf
 
-class DirichletDiffusionTree(object):
+from node import NonTerminal, Leaf
+from .. import Tree
+
+class DirichletDiffusionTree(Tree):
 
     def __init__(self, X, y, df, likelihood_model):
         self.X = X

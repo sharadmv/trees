@@ -8,6 +8,7 @@ class DivergenceFunction(Theanifiable):
         for param in self.get_parameters():
             assert param in parameters, 'Missing parameter %s' % param
         self.parameters = parameters
+        self.compile()
 
     def __getattr__(self, key):
         if key in self.parameters:

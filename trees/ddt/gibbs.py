@@ -1,7 +1,9 @@
 import random
 import numpy as np
 
-class GibbsSampler(object):
+from .. import MCMCSampler
+
+class GibbsSampler(MCMCSampler):
 
     def __init__(self, ddt):
         self.ddt = ddt
