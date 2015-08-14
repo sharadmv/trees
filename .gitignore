@@ -60,3 +60,4 @@ target/
 venv/
 
 trees/server/static/lib
+experiments/.ipynb_checkpoints/
