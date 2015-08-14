@@ -1,0 +1,28 @@
+from ..distribution import Distribution
+import theano.tensor as T
+from theanify import Theanifiable, theanify
+
+class DepthFunction(Theanifiable, Distribution):
+
+    def __init__(self, **parameters):
+        Theanifiable.__init__(self)
+        Distribution.__init__(self, parameters)
+        self._compiled = False
+
+    def alpha(self, depth):
+        if not self._compiled:
+            self.compile()
+        return self._alpha(depth)
+
+    def __getattr__(self, key):
+        if key in self.parameters:
+            return self.parameters[key]
+
+class QuadraticDepth(DepthFunction):
+
+    @theanify(T.dscalar('depth'))
+    def _alpha(self, depth):
+        return self.l ** depth * self.a
+
+    def get_parameters(self):
+        return {"a", "l"}

@@ -4,19 +4,18 @@ import scipy.stats as stats
 
 from ..distribution import Distribution
 
-depth_weight = lambda a, l: lambda j: l ** j * a
-
 class TSSB(Distribution):
 
-    def __init__(self, parameter_process, max_depth=20, *args, **kwargs):
+    def __init__(self, depth_function, parameter_process, max_depth=20, *args, **kwargs):
         super(TSSB, self).__init__(*args, **kwargs)
+        self.depth_function = depth_function
         self.parameter_process = parameter_process
         self.root = None
         self.max_depth = max_depth
 
     def generate_node(self, depth, parent):
-        alpha, gamma = self.get_parameter("alpha"), self.get_parameter("gamma")
-        node = Node(self, parent, depth, alpha(depth), gamma, self.parameter_process)
+        gamma = self.get_parameter("gamma")
+        node = Node(self, parent, depth, self.depth_function.alpha(depth), gamma, self.parameter_process)
         return node
 
     def generate_root(self):
@@ -88,6 +87,7 @@ class TSSB(Distribution):
 
     def get_state(self):
         return {
+            'depth_function': self.depth_function,
             'parameter_process': self.parameter_process,
             'max_depth': self.max_depth,
             'root': self.root.get_state()
@@ -95,12 +95,12 @@ class TSSB(Distribution):
 
     @staticmethod
     def load(state, parameters):
-        tssb = TSSB(state['parameter_process'], parameters=parameters, max_depth=state['max_depth'])
+        tssb = TSSB(state['depth_function'], state['parameter_process'], parameters=parameters, max_depth=state['max_depth'])
         tssb.root = Node.load(tssb, None, state['root'])
         return tssb
 
     def get_parameters(self):
-        return {"alpha", "gamma"}
+        return {"gamma"}
 
 class Node(Distribution):
 
