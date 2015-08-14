@@ -3,8 +3,9 @@ import numpy as np
 import scipy.stats as stats
 
 from ..distribution import Distribution
+from .. import Tree
 
-class TSSB(Distribution):
+class TSSB(Tree, Distribution):
 
     def __init__(self, depth_function, parameter_process, max_depth=20, *args, **kwargs):
         super(TSSB, self).__init__(*args, **kwargs)

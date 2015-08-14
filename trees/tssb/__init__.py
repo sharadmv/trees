@@ -1,4 +1,4 @@
-from tssb import TSSB, depth_weight
+from tssb import TSSB
 from itssb import InteractiveTSSB
 from gibbs import GibbsSampler
 from parameter import GaussianParameterProcess
