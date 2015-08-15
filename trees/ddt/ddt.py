@@ -39,13 +39,20 @@ class DirichletDiffusionTree(Tree):
         ddt.root = self.root.copy()
         return ddt
 
-    def log_likelihood(self):
+    def marg_log_likelihood(self):
         assert self.root is not None
         _, tree_structure, data_structure = self.root.log_likelihood(self.df, self.likelihood_model, self.root.time)
         return tree_structure + data_structure
 
+    def get_node(self, index):
+        return self.root.get_node(index)
+
     def point_index(self, point):
         return self.root.point_index(point)
+
+    def uniform_index(self, u):
+        return self.root.uniform_index(u)
+
     def choice(self):
         nodes = self.root.nodes()
         nodes.remove(self.root)

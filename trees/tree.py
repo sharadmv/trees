@@ -15,6 +15,9 @@ class Tree(object):
     def point_index(self, i):
         raise NotImplementedError
 
+    def uniform_index(self, u):
+        raise NotImplementedError
+
 class MCMCSampler(object):
 
     def sample(self):
