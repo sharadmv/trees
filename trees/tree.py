@@ -20,5 +20,8 @@ class Tree(object):
 
 class MCMCSampler(object):
 
+    def __init__(self, tree, X):
+        raise NotImplementedError
+
     def sample(self):
         raise NotImplementedError

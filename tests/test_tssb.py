@@ -1,5 +1,5 @@
 import numpy as np
-from trees.tssb import TSSB, GaussianParameterProcess, depth_weight
+from trees.tssb import TSSB, GaussianParameterProcess, QuadraticDepth
 import unittest
 
 class TestAddRemove(unittest.TestCase):
@@ -11,14 +11,13 @@ class TestAddRemove(unittest.TestCase):
         sigma0 = np.eye(D) * 4.0
         sigma = np.eye(D) / 4.0
         self.process = GaussianParameterProcess(mu0, sigma0, sigma0, sigma)
-        self.tssb = TSSB(self.process, parameters={
-            'alpha': depth_weight(2, 1),
+        self.df = QuadraticDepth(a=2, l=1)
+        self.tssb = TSSB(self.df, self.process, parameters={
             'gamma': 0.7
         })
 
     def get_tssb(self, seed=1):
-        return TSSB(self.process, parameters={
-            'alpha': depth_weight(2, 1),
+        return TSSB(self.df, self.process, parameters={
             'gamma': 0.7
         }, seed=seed)
 

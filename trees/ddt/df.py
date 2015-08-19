@@ -1,5 +1,6 @@
 import theano.tensor as T
 from theanify import theanify, Theanifiable
+from theano.tensor.shared_randomstreams import RandomStreams
 
 class DivergenceFunction(Theanifiable):
 
@@ -26,6 +27,12 @@ class DivergenceFunction(Theanifiable):
     def get_parameters(self):
         raise NotImplementedError
 
+    @theanify(T.dscalar('t'), T.dscalar('t1'), T.dscalar('m'))
+    def log_pdf(self, t, t1, m):
+        z = (self.cumulative_divergence(t1) - self.cumulative_divergence(t)) / m
+        p = T.log(self.divergence(t)) -  T.log(m)
+        return z + p
+
 class Inverse(DivergenceFunction):
 
     @theanify(T.dscalar('t'))
@@ -36,35 +43,20 @@ class Inverse(DivergenceFunction):
     def cumulative_divergence(self, t):
         return -self.c * T.log(1 - t)
 
-    @theanify(T.dscalar('y'), T.dscalar('t1'), T.dscalar('t2'))
-    def inverse_cumulative(self, y, t1, t2):
-        z = self.cumulative_divergence(t2) - self.cumulative_divergence(t1)
-        unscaled = (t1 - 1) / (t1 - t2) * (1 - T.exp(-y * z/ self.c))
-        return t1 + (t2 - t1) * unscaled
+    @theanify(T.dscalar('t'), T.dscalar('t1'), T.dscalar('m'))
+    def cdf(self, t, t1, m):
+        c = float(self.c)
+        return (1 / (1 - t1)) ** (c / m) - ((1 - t) / (1 - t1)) ** (c / m)
+
+    @theanify(T.dscalar('t1'), T.dscalar('t2'), T.dscalar('m'))
+    def sample(self, t1, t2, m):
+        y = RandomStreams().uniform()
+        c = float(self.c)
+        lower = self.cdf(t1, t1, m)
+        upper = self.cdf(t2, t1, m)
+        y = lower + y * (upper - lower)
+        t = 1-((1-t1)**(c/m)*((1-t1)**(-c/m)-y))**(m/c)
+        return t, self.log_pdf(t, t1, m)
 
     def get_parameters(self):
         return {"c"}
-
-class InverseQuadratic(DivergenceFunction):
-
-    @theanify(T.dscalar('t'))
-    def divergence(self, t):
-        return self.b + self.d / (1 - t) ** 2
-
-    @theanify(T.dscalar('t'))
-    def cumulative_divergence(self, t):
-        return self.b * t - self.d - self.d / (t - 1)
-
-    @theanify(T.dscalar('y'), T.dscalar('t1'), T.dscalar('t2'))
-    def inverse_cumulative(self, y, t1, t2):
-        z = self.cumulative_divergence(t2) - self.cumulative_divergence(t1)
-        if self.b == 0:
-            unscaled = (t1 - 1) ** 2 * y  * z/ ((t1 - t2) * (t1 * y * z - self.d - y * z))
-            return t1 + (t2 - t1) * unscaled
-        b = self.b
-        d = self.d
-        unscaled = (t1**3*b-t1**2*b*t2-2*t1**2*b-t1**2*y*z+T.sqrt((t1-t2)**2*(t1**4*b**2-4*t1**3*b**2+2*t1**3*b*y*z+6*t1**2*b**2+2*t1**2*b*d-6*t1**2*b*y*z+t1**2*y**2*z**2-4*t1*b**2-4*t1*b*d+6*t1*b*y*z-2*t1*d*y*z-2*t1*y**2*z**2+b**2+2*b*d-2*b*y*z+d**2+2*d*y*z+y**2*z**2))+2*t1*b*t2+t1*b+t1*t2*y*z+t1*d+t1*y*z-b*t2-t2*d-t2*y*z)/(2*(t1-1)*b*(t1-t2)**2)
-        return t1 + (t2 - t1) * unscaled
-
-    def get_parameters(self):
-        return {"b", "d"}

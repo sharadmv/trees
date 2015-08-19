@@ -4,8 +4,8 @@ from tssb import TSSB, Node
 
 class InteractiveTSSB(TSSB):
 
-    def __init__(self, parameter_process, max_depth=20, constraints=[], *args, **kwargs):
-        super(InteractiveTSSB, self).__init__(parameter_process, max_depth=max_depth, *args, **kwargs)
+    def __init__(self, depth_function, parameter_process, max_depth=20, constraints=[], *args, **kwargs):
+        super(InteractiveTSSB, self).__init__(depth_function, parameter_process, max_depth=max_depth, *args, **kwargs)
         self.constraints = {}
         for constraint in constraints:
             self.add_constraint(constraint)
@@ -59,8 +59,8 @@ class InteractiveTSSB(TSSB):
         return root.find_node(u, (), constraints=constraints, max_depth=self.max_depth)
 
     def generate_node(self, depth, parent):
-        alpha, gamma = self.get_parameter("alpha"), self.get_parameter("gamma")
-        node = InteractiveNode(self, parent, depth, alpha(depth), gamma, self.parameter_process)
+        gamma = self.get_parameter("gamma")
+        node = InteractiveNode(self, parent, depth, self.depth_function.alpha(depth), gamma, self.parameter_process)
         return node
 
 

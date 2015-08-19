@@ -1,5 +1,5 @@
-from df import Inverse, InverseQuadratic
+from df import Inverse
 from ddt import DirichletDiffusionTree
-from gibbs import GibbsSampler
+from mcmc import MetropolisHastingsSampler
 from likelihood import GaussianLikelihoodModel
 from node import NonTerminal, Leaf

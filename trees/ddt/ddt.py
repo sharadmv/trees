@@ -3,39 +3,19 @@ import mpld3
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-import random
 
-from node import NonTerminal, Leaf
+from node import Leaf
 from .. import Tree
 
 class DirichletDiffusionTree(Tree):
 
-    def __init__(self, X, y, df, likelihood_model):
-        self.X = X
-        self.y = y
+    def __init__(self, df, likelihood_model):
         self.df = df
         self.likelihood_model = likelihood_model
-
-        self.N, self.D = self.X.shape
         self.root = None
-        self.initialize_assignments()
-
-    def initialize_assignments(self):
-        nodes = [Leaf(None, i, self.X[i]) for i in xrange(self.N)]
-        while len(nodes) > 1:
-            random.shuffle(nodes)
-            (a, b), rest = nodes[:2], nodes[2:]
-            merge_time = random.uniform(0, min(a.time, b.time))
-            node = NonTerminal(a, b, None, (a.state + b.state) / 2.0, merge_time)
-            a.parent = node
-            b.parent = node
-            nodes = [node] + rest
-        self.root = nodes[0]
-        self.root.time = 0
-        self.root.state = self.likelihood_model.mu0
 
     def copy(self):
-        ddt = DirichletDiffusionTree(self.X, self.y, self.df, self.likelihood_model)
+        ddt = DirichletDiffusionTree(self.df, self.likelihood_model)
         ddt.root = self.root.copy()
         return ddt
 
@@ -44,75 +24,33 @@ class DirichletDiffusionTree(Tree):
         _, tree_structure, data_structure = self.root.log_likelihood(self.df, self.likelihood_model, self.root.time)
         return tree_structure + data_structure
 
+    def dfs(self):
+        assert self.root is not None
+        yield self.root
+        s = set(self.root.children)
+        while len(s) > 0:
+            child = s.pop()
+            yield child
+            if not isinstance(child, Leaf):
+                s.update(child.children)
+
     def get_node(self, index):
         return self.root.get_node(index)
 
     def point_index(self, point):
         return self.root.point_index(point)
 
-    def uniform_index(self, u):
-        return self.root.uniform_index(u)
+    def uniform_index(self, u, ignore_depth=0):
+        return self.root.uniform_index(u, ignore_depth=ignore_depth)
+
+    def sample_assignment(self):
+        return self.root.sample_assignment(self.df)
+
+    def log_prob_assignment(self, assignment):
+        return self.root.log_prob_assignment(self.df, assignment)
 
     def choice(self):
-        nodes = self.root.nodes()
-        nodes.remove(self.root)
-        new_nodes = []
-        for node in nodes:
-            if not node.parent == self.root:
-                new_nodes.append(node)
-        return random.choice(new_nodes)
-
-    def remove_parent(self, node):
-        assert node is not self.root, "Root has no parent."
-        if node.parent == self.root:
-            old = self.root
-            self.root = None
-            return old, None, 0.0
-
-        parent = node.parent
-        grandparent = parent.parent
-
-        parent_index = parent.index(node)
-        grandparent_index = grandparent.index(parent)
-        other_parent = grandparent.get_child(1 - grandparent_index)
-        other_child = parent.get_child(1 - parent_index)
-        other_child_count = other_child.point_count()
-
-        side_probability = np.log(other_child_count) - np.log(other_child_count +
-                                                              node.point_count() +
-                                                              other_parent.point_count())
-        time_probability = -np.log(parent.time - grandparent.time)
-
-        grandparent.set_child(grandparent_index, parent.get_child(1 - parent_index))
-        parent.get_child(1 - parent_index).parent = grandparent
-
-        parent.children.remove(parent.get_child(1 - parent_index))
-
-        return parent, grandparent, side_probability + time_probability
-
-    def attach_node(self, node, parent):
-        if parent is None:
-            self.root = node
-            return 0.0
-        num_points = parent.point_count()
-        probs = [parent.left.point_count() / float(num_points), parent.right.point_count() / float(num_points)]
-        logging.debug("Choosing path for node: %s" % str(probs))
-        choice = np.random.choice([0, 1], p=probs)
-        side_probability = np.log(probs[choice])
-        logging.debug("Chose path: %u (%f)" % (choice, probs[choice]))
-
-        old_node = parent.get_child(choice)
-        old_node.parent = node
-        node.children.append(old_node)
-
-        parent.set_child(choice, node)
-        node.parent = parent
-
-
-        node.time = random.uniform(node.parent.time, min(node.left.time, node.right.time))
-        time_probability = -np.log(min(node.left.time, node.right.time) - node.parent.time)
-
-        return side_probability + time_probability
+        return self.uniform_index(np.random.random())
 
     def update_latent(self):
         self.root.update_latent(self.likelihood_model)
@@ -120,7 +58,7 @@ class DirichletDiffusionTree(Tree):
     def __getitem__(self, key):
         return self.root[key]
 
-    def plot_mpld3(self):
+    def plot_mpld3(self, y):
         fig, ax = plt.subplots(1, 1)
         g, nodes, node_labels = self.plot(ax=ax)
         labels = []

@@ -2,11 +2,13 @@ import logging
 import scipy.stats as stats
 import numpy as np
 
-class GibbsSampler(object):
+from .. import MCMCSampler
 
-    def __init__(self, tssb, parameter_process, X):
+class GibbsSampler(MCMCSampler):
+
+    def __init__(self, tssb, X):
         self.tssb = tssb
-        self.parameter_process = parameter_process
+        self.parameter_process = self.tssb.parameter_process
         self.X = X
         self.N, self.D = self.X.shape
 
@@ -16,10 +18,6 @@ class GibbsSampler(object):
             if node is not None:
                 self.tssb.add_point(i, index)
         self.tssb.garbage_collect()
-
-    def log_likelihood(self, i, parameter):
-        return self.parameter_process.data_log_likelihood(self.X[i], parameter)
-
 
     def sample_assignments(self):
         idx = np.arange(self.N)
@@ -31,7 +29,7 @@ class GibbsSampler(object):
         for node in self.tssb.dfs():
             self.sample_parameter(node)
 
-    def gibbs_sample(self):
+    def sample(self):
         logging.debug("Starting Gibbs sampling iteration...")
         logging.debug("Sampling assignments...")
         self.sample_assignments()
@@ -53,7 +51,6 @@ class GibbsSampler(object):
         children = np.array(children)
         node.parameter = self.parameter_process.sample_posterior(self.X[data], children, parent)
 
-
     def sample_assignment(self, i):
         logging.debug("Sampling assignment for %u" % i)
         if i not in self.tssb.root.sub_points():
@@ -74,7 +71,6 @@ class GibbsSampler(object):
         assignment = None
 
         while assignment is None:
-            logging.debug("Restarting with bounds [%f, %f]" % (u_min, u_max))
 
             if np.isclose(u_min, u_max):
                 assignment = index
@@ -94,9 +90,6 @@ class GibbsSampler(object):
             else:
                 u_max = u
         self.tssb.add_point(i, assignment)
-        if 'constraints' in self.tssb.__dict__:
-            if i in self.tssb.constraints and len(self.tssb.constraints[i]) > 0:
-                logging.info("Assigned %u to %s, %s" % (i, str(assignment), self.tssb.constraints[i]))
         self.tssb.garbage_collect()
 
         return assignment
@@ -105,7 +98,6 @@ class GibbsSampler(object):
         nodes = list(self.tssb.dfs())
         for node in nodes:
             node.size_biased_permutation()
-
 
     def sample_sticks(self):
         for node in self.tssb.dfs():
