@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 
-from node import Leaf
+from node import NonTerminal, Leaf
 from .. import Tree
 
 class DirichletDiffusionTree(Tree):
@@ -13,16 +13,20 @@ class DirichletDiffusionTree(Tree):
         self.df = df
         self.likelihood_model = likelihood_model
         self.root = None
+        self._marg_log_likelihood = None
 
     def copy(self):
         ddt = DirichletDiffusionTree(self.df, self.likelihood_model)
         ddt.root = self.root.copy()
         return ddt
 
+
     def marg_log_likelihood(self):
-        assert self.root is not None
-        _, tree_structure, data_structure = self.root.log_likelihood(self.df, self.likelihood_model, self.root.time)
-        return tree_structure + data_structure
+        if self._marg_log_likelihood is None:
+            assert self.root is not None
+            _, tree_structure, data_structure = self.root.log_likelihood(self.df, self.likelihood_model, self.root.time)
+            self._marg_log_likelihood = tree_structure + data_structure
+        return self._marg_log_likelihood
 
     def dfs(self):
         assert self.root is not None
@@ -37,6 +41,9 @@ class DirichletDiffusionTree(Tree):
     def get_node(self, index):
         return self.root.get_node(index)
 
+    def attach_node(self, node, assignment):
+        return self.root.attach_node(node, assignment)
+
     def point_index(self, point):
         return self.root.point_index(point)
 
@@ -49,8 +56,8 @@ class DirichletDiffusionTree(Tree):
     def log_prob_assignment(self, assignment):
         return self.root.log_prob_assignment(self.df, assignment)
 
-    def choice(self):
-        return self.uniform_index(np.random.random())
+    def choice(self, ignore_depth=0):
+        return self.uniform_index(np.random.random(), ignore_depth=ignore_depth)
 
     def update_latent(self):
         self.root.update_latent(self.likelihood_model)
@@ -65,7 +72,7 @@ class DirichletDiffusionTree(Tree):
         for node in g.nodes_iter():
             if isinstance(node, Leaf):
                 labels.append("<div class='tree-label'><div class='tree-label-text'>%s</div></div>"
-                              % self.y[node.point])
+                              % y[node.point])
             else:
                 labels.append("<div class='tree-label'><div class='tree-label-text'>%f</div></div>"
                               % node.time)
@@ -99,3 +106,10 @@ class DirichletDiffusionTree(Tree):
                                 alpha=0.8, arrows=False, ax=ax)
         labels = nx.draw_networkx_labels(g, pos, labels, font_size=10, font_color='w', ax=ax)
         return g, nodes, labels
+
+    def non_terminal(self, *args, **kwargs):
+        return NonTerminal(*args, **kwargs)
+
+    def leaf(self, *args, **kwargs):
+        return Leaf(*args, **kwargs)
+

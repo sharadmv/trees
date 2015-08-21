@@ -1,4 +1,6 @@
 import numpy as np
+import scipy.stats as stats
+import numpy as np
 from trees.ddt import DirichletDiffusionTree, Inverse, GaussianLikelihoodModel, MetropolisHastingsSampler
 import unittest
 
@@ -10,7 +12,7 @@ class TestDDT(unittest.TestCase):
         self.df = Inverse(c=0.5)
         self.lm = GaussianLikelihoodModel(mu0=np.zeros(self.D),
                                           sigma0=np.eye(self.D),
-                                          sigma=np.eye(self.D))
+                                          sigma=np.eye(self.D)).compile()
         self.ddt = DirichletDiffusionTree(self.df, self.lm)
         self.sampler = MetropolisHastingsSampler(self.ddt, np.zeros((self.N, self.D)))
         self.sampler.initialize_assignments()
@@ -18,7 +20,7 @@ class TestDDT(unittest.TestCase):
     def test_choice(self):
         stay_prob = 1.0 / self.ddt.root.tree_size
 
-        self.assertEqual(self.ddt.uniform_index(stay_prob / 2, ignore_depth=0), self.ddt.root)
+        self.assertEqual(self.ddt.uniform_index(stay_prob / 2, ignore_depth=0)[0], self.ddt.root)
 
         left_size, right_size = self.ddt.root.left.tree_size, self.ddt.root.right.tree_size
 
@@ -30,10 +32,10 @@ class TestDDT(unittest.TestCase):
 
         p = 1.0 / left_size / 2
 
-        self.assertEqual(self.ddt.uniform_index(stay_prob + p * left_prob, ignore_depth=0), self.ddt.root.left)
+        self.assertEqual(self.ddt.uniform_index(stay_prob + p * left_prob, ignore_depth=0)[0], self.ddt.root.left)
 
         p = 1.0 / right_size / 2
-        self.assertEqual(self.ddt.uniform_index(stay_prob + left_prob + p * right_prob, ignore_depth=0), self.ddt.root.right)
+        self.assertEqual(self.ddt.uniform_index(stay_prob + left_prob + p * right_prob, ignore_depth=0)[0], self.ddt.root.right)
 
     def test_get_node(self):
         self.assertEqual(self.ddt[()], self.ddt.root)
@@ -60,7 +62,7 @@ class TestDDT(unittest.TestCase):
         sibling = node.parent.other_child(node)
         old_grandparent = old_parent.parent
 
-        parent, grandparent = node.detach_node()
+        parent = node.detach_node()
 
         self.assertEqual(old_parent, parent)
         self.assertEqual(node.parent, parent)
@@ -74,3 +76,12 @@ class TestDDT(unittest.TestCase):
         for _ in xrange(1000):
             assignment, log_prob = self.ddt.sample_assignment()
             self.assertAlmostEqual(log_prob, self.ddt.log_prob_assignment(assignment), places=5)
+
+    def test_gaussian(self):
+        mu = np.zeros(self.D)
+        x = np.ones(self.D)
+
+        for t in np.arange(0, 1, 0.01):
+            diff = 1 - t
+            self.assertAlmostEqual(self.lm.calculate_transition(x, mu, 1, t),
+                             stats.multivariate_normal(mean=mu, cov=np.eye(self.D) * diff).logpdf(x))

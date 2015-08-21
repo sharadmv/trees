@@ -38,7 +38,7 @@ class Node(object):
         parent.remove_child(sibling)
         grandparent.replace_child(parent, sibling)
         parent.parent = None
-        return parent, grandparent
+        return parent
 
 class NonTerminal(Node):
 
@@ -127,42 +127,40 @@ class NonTerminal(Node):
             pass
         node2.parent = self
 
-    def attach_node(self, node, df, u=None):
-        left_size, right_size = self.left.point_count(), self.right.point_count()
-        total = float(left_size + right_size)
-        parent_time = self.time
-        if u is None:
-            u = np.random.random()
-
-        if u < left_size / total:
-            replace = self.left
+    def attach_node(self, node, assignment):
+        index, time = assignment
+        idx, rest = index[0], index[1:]
+        choice = self.children[idx]
+        if len(rest) == 0:
+            node.time = time
+            self.replace_child(choice, node)
+            choice.parent = node
+            node.children.append(choice)
         else:
-            replace = self.right
-        end_time = min(replace.time, node.left.time)
-        node.time = df.inverse_cumulative(np.random.random(), parent_time, end_time)
-        self.replace_child(replace, node)
-        node.children.append(replace)
-        replace.parent = node
-        return node
+            choice.attach_node(node, (rest, time))
 
-
-    def uniform_index(self, u, ignore_depth=0):
+    def uniform_index(self, u, index=(), ignore_depth=0):
         if ignore_depth > 0:
-            total = float(self.left.tree_size + self.right.tree_size)
-            left_prob, right_prob = self.left.tree_size / total, self.right.tree_size / total
+            left_size, right_size = self.left.tree_size, self.right.tree_size
+            if right_size == 1:
+                return self.left.uniform_index(u, ignore_depth=ignore_depth - 1, index=index+(0,))
+            if left_size == 1:
+                return self.right.uniform_index(u, ignore_depth=ignore_depth - 1, index=index+(1,))
+            total = float(left_size + right_size)
+            left_prob, right_prob = left_size / total, right_size / total
             if u < left_prob:
-                return self.left.uniform_index(u / left_prob, ignore_depth=ignore_depth - 1)
-            return self.left.uniform_index((u - left_prob) / right_prob, ignore_depth=ignore_depth - 1)
+                return self.left.uniform_index(u / left_prob, ignore_depth=ignore_depth - 1, index=index+(0,))
+            return self.right.uniform_index((u - left_prob) / right_prob, ignore_depth=ignore_depth - 1, index=index+(1,))
         stay_prob = 1.0 / self.tree_size
         if u < stay_prob:
-            return self
+            return self, (index, self.parent.time)
         remainder = 1 - stay_prob
         total = float(self.left.tree_size + self.right.tree_size)
         left_prob, right_prob = self.left.tree_size / total * remainder, \
             self.right.tree_size / total * remainder
         if u < stay_prob + left_prob:
-            return self.left.uniform_index((u - stay_prob) / left_prob, ignore_depth=0)
-        return self.right.uniform_index((u - stay_prob - left_prob) / right_prob, ignore_depth=0)
+            return self.left.uniform_index((u - stay_prob) / left_prob, ignore_depth=0, index=index+(0,))
+        return self.right.uniform_index((u - stay_prob - left_prob) / right_prob, ignore_depth=0, index=index+(1,))
 
     @property
     def left(self):
@@ -179,13 +177,11 @@ class NonTerminal(Node):
         right_path_count, right_prob, right_ll = self.right.log_likelihood(df, likelihood_model, self.time)
 
         if self.parent is not None:
-            log_likelihood = likelihood_model.transition_probability(self.state, self.time,
-                                                                     self.parent.state,
-                                                                     self.parent.time)
+            log_likelihood = likelihood_model.transition_probability(self,
+                                                                    self.parent)
         else:
-            log_likelihood = likelihood_model.transition_probability(self.state, self.time,
-                                                                     None,
-                                                                     None)
+            log_likelihood = likelihood_model.transition_probability(self,
+                                                                    None)
         return left_path_count + right_path_count, left_prob + diverge_prob + right_prob, log_likelihood + left_ll + right_ll
 
     def copy(self):
@@ -245,7 +241,10 @@ class Leaf(Node):
         return self
 
     def log_likelihood(self, df, likelihood_model, parent_time):
-        return 1, 0, likelihood_model.transition_probability(self.state, self.time, parent=self.parent.state, parent_time=self.parent.time)
+        return 1, 0, likelihood_model.transition_probability(self, self.parent)
+
+    def log_prob_assignment(self, df, assignment):
+        return 0
 
     def verify_times(self):
         assert self.time == 1.0
@@ -256,8 +255,8 @@ class Leaf(Node):
     def points(self):
         return {self.point}
 
-    def uniform_index(self, _, ignore_depth=0):
-        return self
+    def uniform_index(self, _, ignore_depth=0, index=()):
+        return self, (index, self.parent.time)
 
     def point_count(self):
         return 1
