@@ -27,6 +27,7 @@ class GaussianLikelihoodModel(LikelihoodModel):
     def transition_probability(self, child, parent):
         if parent is None:
             return self.calculate_transition(child.state, np.zeros(self.D), child.time, -1)
+        assert parent.time < child.time, (parent.time, child.time)
         return self.calculate_transition(child.state, parent.state, child.time, parent.time)
 
     @theanify(T.dvector('state'), T.dvector('parent'), T.dscalar('time'), T.dscalar('parent_time'))
@@ -57,8 +58,7 @@ class GaussianLikelihoodModel(LikelihoodModel):
             sigma0inv = np.linalg.inv(sigma0)
 
         mus = [c.state for c in children]
-        if time == 1.0:
-            time -= 0.00000000001
+
         sigmas = [self.sigma * (c.time - time) for c in children]
 
         sigmas_inv = [np.linalg.inv(s) for s in sigmas]

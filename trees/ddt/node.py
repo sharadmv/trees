@@ -7,6 +7,16 @@ class Node(object):
         self.parent = parent
         self.state = state
         self.time = time
+        self.children = []
+
+    def is_leaf(self):
+        return len(self.children) == 0
+
+    @staticmethod
+    def construct(self, points, X):
+        if len(points) == 1:
+            return Leaf.construct(points, X)
+        return NonTerminal.construct(points, X)
 
     def copy(self):
         raise NotImplementedError
@@ -20,7 +30,7 @@ class Node(object):
     def point_count(self):
         raise NotImplementedError
 
-    def point_index(self, point):
+    def point_index(self, point, index=()):
         raise NotImplementedError
 
     def uniform_index(self, u):
@@ -45,6 +55,23 @@ class NonTerminal(Node):
     def __init__(self, left, right, parent, state, time):
         super(NonTerminal, self).__init__(parent, state, time)
         self.children = [left, right]
+
+    @classmethod
+    def construct(points, X):
+        N = len(points)
+        points = list(points)
+        left, right = points[:N / 2], points[N / 2:]
+        left_node, right_node = Node.construct(left, X), Node.construct(right, X)
+        node = NonTerminal(
+            left_node,
+            right_node,
+            None,
+            (left_node.state + right_node.state) / 2.0,
+            min(left_node.time, right_node.time) / 2.0,
+        )
+        left_node.parent = node
+        right_node.parent = node
+        return node
 
     @property
     def tree_size(self):
@@ -99,11 +126,11 @@ class NonTerminal(Node):
         self.left.update_latent(lm)
         self.right.update_latent(lm)
 
-    def point_index(self, point):
+    def point_index(self, point, index=()):
         if point in self.left.points():
-            return self.left.point_index(point)
+            return self.left.point_index(point, index=index+(0,))
         if point in self.right.points():
-            return self.right.point_index(point)
+            return self.right.point_index(point, index=index+(1,))
 
     def other_child(self, node):
         if node == self.left:
@@ -121,7 +148,7 @@ class NonTerminal(Node):
         assert node2 not in self.children
         if node1 == self.left:
             self.children[0] = node2
-        if node1 == self.right:
+        elif node1 == self.right:
             self.children[1] = node2
         else:
             pass
@@ -201,7 +228,10 @@ class NonTerminal(Node):
         return [self] + self.left.nodes() + self.right.nodes()
 
     def points(self):
-        return self.left.points() | self.right.points()
+        points = set()
+        for child in self.children:
+            points |= child.points()
+        return points
 
     def point_count(self):
         return self.left.point_count() + self.right.point_count()
@@ -226,6 +256,12 @@ class Leaf(Node):
         super(Leaf, self).__init__(parent, state, 1.0)
         self.point = point
 
+    @classmethod
+    def construct(points, X):
+        assert len(points) == 1
+        point = list(points)[0]
+        return Leaf(None, point, X[point])
+
     @property
     def tree_size(self):
         return 1
@@ -236,9 +272,9 @@ class Leaf(Node):
     def nodes(self):
         return [self]
 
-    def point_index(self, point):
+    def point_index(self, point, index=()):
         assert point == self.point
-        return self
+        return self, (index, self.time)
 
     def log_likelihood(self, df, likelihood_model, parent_time):
         return 1, 0, likelihood_model.transition_probability(self, self.parent)

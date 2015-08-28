@@ -3,7 +3,6 @@ import random
 import numpy as np
 
 from .. import MCMCSampler
-from node import Leaf, NonTerminal
 
 class MetropolisHastingsSampler(MCMCSampler):
 
@@ -11,20 +10,17 @@ class MetropolisHastingsSampler(MCMCSampler):
         self.ddt = ddt
         self.X = X
         self.N, self.D = self.X.shape
+        self.last_move = None
+
+    def add_constraint(self, constraint):
+        self.ddt.add_constraint(constraint)
+        a, b, c = constraint
+        self.move_point_parent(a, force=True)
+        self.move_point_parent(b, force=True)
+        self.move_point_parent(c, force=True)
 
     def initialize_assignments(self):
-        nodes = [self.ddt.leaf(None, i, self.X[i]) for i in xrange(self.N)]
-        while len(nodes) > 1:
-            random.shuffle(nodes)
-            (a, b), rest = nodes[:2], nodes[2:]
-            merge_time = random.uniform(0, min(a.time, b.time))
-            node = self.ddt.non_terminal(a, b, None, (a.state + b.state) / 2.0, merge_time)
-            a.parent = node
-            b.parent = node
-            nodes = [node] + rest
-        self.ddt.root = nodes[0]
-        self.ddt.root.time = 0
-        self.ddt.root.state = self.ddt.likelihood_model.mu0
+        self.ddt.initialize_assignments(self.X)
 
     def sample_node_parent(self):
         ddt = self.ddt.copy()
@@ -35,16 +31,27 @@ class MetropolisHastingsSampler(MCMCSampler):
         index = index[:-1]
         self.parent_move(ddt, node, (index, time))
 
-    def parent_move(self, ddt, node, assignment):
+    def move_point_parent(self, point, force=False):
+        ddt = self.ddt.copy()
+        node, assignment = ddt.point_index(point)
+        assert node is not ddt.root
+        assert node.parent is not ddt.root
+        index, time = assignment
+        index = index[:-1]
+        time = node.parent.time
+        self.parent_move(ddt, node, (index, time), force=force)
+
+    def parent_move(self, ddt, node, assignment, force=False):
         old_tree_likelihood = self.ddt.marg_log_likelihood()
         parent = node.detach_node()
+        points = parent.points()
         backward_prob = ddt.log_prob_assignment(assignment)
 
         time = float('inf')
         move = None
         try_counter = 0
         while time > parent.left.time:
-            (move, time), forward_prob = ddt.sample_assignment()
+            (move, time), forward_prob = ddt.sample_assignment(points=points)
             try_counter += 1
             if try_counter > 500:
                 return
@@ -56,7 +63,8 @@ class MetropolisHastingsSampler(MCMCSampler):
         logging.debug("Probs: (%f, %f)" % (old_tree_likelihood, new_tree_likelihood))
         a = min(1, np.exp(new_tree_likelihood + backward_prob - old_tree_likelihood - forward_prob))
         logging.debug("Accept Probability: %f" % a)
-        if np.random.random() < a:
+        if force or np.random.random() < a:
+            self.last_move = self.ddt, assignment, (move, time)
             self.ddt = ddt
 
     def update_latent(self):
