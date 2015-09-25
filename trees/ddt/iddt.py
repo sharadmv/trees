@@ -1,3 +1,4 @@
+import logging
 from ddt import DirichletDiffusionTree
 from inode import InteractiveNode
 
@@ -14,7 +15,17 @@ class InteractiveDirichletDiffusionTree(DirichletDiffusionTree):
         self.root.state = self.likelihood_model.mu0
 
     def sample_assignment(self, points=None):
-        return self.root.sample_assignment(self.df, self.constraints, points)
+        filtered_constraints = []
+        my_points = self.root.points()
+        for constraint in self.constraints:
+            a, b, c = constraint
+            if a in points and b in points:
+                continue
+            if a in my_points and b in my_points and c in my_points:
+                continue
+            filtered_constraints.append(constraint)
+        logging.debug("Sampling points: %s" % str(points))
+        return self.root.sample_assignment(self.df, filtered_constraints, points)
 
     def add_constraint(self, constraint, X):
         self.constraints.append(constraint)
@@ -51,3 +62,9 @@ class InteractiveDirichletDiffusionTree(DirichletDiffusionTree):
 
     def verify_constraints(self, constraints):
         return all(self.verify_constraint(c) for c in constraints)
+
+    def score_constraints(self, constraints):
+        score = 0
+        for constraint in constraints:
+            score += self.verify_constraint(constraint)
+        return score

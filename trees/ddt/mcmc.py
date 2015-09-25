@@ -57,12 +57,12 @@ class MetropolisHastingsSampler(MCMCSampler):
                 return
         ddt.attach_node(parent, (move, time))
         new_tree_likelihood = ddt.marg_log_likelihood()
-        logging.debug("Move: %s" % str((move, time)))
-        logging.debug("Forward: %f" % forward_prob)
-        logging.debug("Backward: %f" % backward_prob)
-        logging.debug("Probs: (%f, %f)" % (old_tree_likelihood, new_tree_likelihood))
+        #logging.debug("Move: %s" % str((move, time)))
+        #logging.debug("Forward: %f" % forward_prob)
+        #logging.debug("Backward: %f" % backward_prob)
+        #logging.debug("Probs: (%f, %f)" % (old_tree_likelihood, new_tree_likelihood))
         a = min(1, np.exp(new_tree_likelihood + backward_prob - old_tree_likelihood - forward_prob))
-        logging.debug("Accept Probability: %f" % a)
+        #logging.debug("Accept Probability: %f" % a)
         if force or np.random.random() < a:
             self.last_move = self.ddt, assignment, (move, time)
             self.ddt = ddt

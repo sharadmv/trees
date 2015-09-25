@@ -14,11 +14,73 @@ class InteractiveNode(Node):
             graph.add_edge(a, b)
         return graph
 
+    def prune_constraints(self, constraints, points, idx):
+        choice, other = self.children[idx], self.children[1 - idx]
+        new_constraints = []
+        choice_points, other_points = choice.points(), other.points()
+        for constraint in constraints:
+            a, b, c = constraint
+            if a in points and b in choice_points and c in other_points:
+                continue
+            if b in points and a in choice_points and c in other_points:
+                continue
+
+            new_constraints.append(constraint)
+        return new_constraints
+
     @staticmethod
     def construct(points, constraints, X):
         if len(points) == 1:
             return InteractiveLeaf.construct(points, constraints, X)
         return InteractiveNonTerminal.construct(points, constraints, X)
+
+    def is_path_banned(self, constraints, points):
+        my_points = self.points()
+
+        for constraint in constraints:
+            a, b, c = constraint
+
+            if a in points and b not in my_points and c in my_points:
+                return True
+            if b in points and a not in my_points and c in my_points:
+                return True
+        return False
+
+    def is_path_required(self, constraints, points):
+        my_points = self.points()
+
+        for point in points:
+            for constraint in constraints:
+                a, b, c = constraint
+
+                if a == point:
+                    if b in my_points:
+                        return True
+                elif b == point:
+                    if a in my_points:
+                        return True
+        return False
+
+    def is_required(self, constraints, points):
+        my_points = self.points()
+        for constraint in constraints:
+            a, b, c = constraint
+            if a in points and b in my_points and c in my_points:
+                return True
+            if b in points and a in my_points and c in my_points:
+                return True
+        return False
+
+    def is_banned(self, constraints, points):
+        for idx, child in enumerate(self.children):
+            child_points = child.points()
+            other_points = self.children[1 - idx].points()
+            for constraint in constraints:
+                a, b, c = constraint
+                if c in points and ((b in child_points and a in other_points) or
+                                    (a in child_points and b in other_points)):
+                    return True
+        return False
 
 class InteractiveNonTerminal(NonTerminal, InteractiveNode):
 
@@ -97,15 +159,8 @@ class InteractiveNonTerminal(NonTerminal, InteractiveNode):
             points = right_points
 
         move_points = set(n for n in nx.node_connected_component(graph, incorrect) if n in points)
-        print "Move points", move_points
         nodes_to_move = [self.point_index(n) for n in move_points]
         nodes_to_move.sort(key=lambda x: len(x[1][0]))
-
-        #if len(nodes_to_move) == len(children_points[1 - move_into]):
-            #into_node = self.children[move_into]
-            #move_into = None
-        #else:
-            #into_node = self
 
         for node, (_, _) in nodes_to_move:
             if self.children[1 - move_into].point_count() == 1:
@@ -125,114 +180,69 @@ class InteractiveNonTerminal(NonTerminal, InteractiveNode):
         node.right.parent = node
         return node
 
-    def get_required(self, constraints, points):
-
-        constraints = constraints.copy()
-        requirements = set()
-
-        children_points = [c.points() for c in self.children]
-
-        if len(children_points) == 1:
-            return None, constraints
-
-        my_points = children_points[0] | children_points[1]
-
-        for constraint in constraints.copy():
-            a, b, c = constraint
-
-            if (a in my_points and b not in my_points) or (b in my_points and a not in my_points):
-                continue
-
-            if a in points and b in points:
-                constraints.remove(constraint)
-                continue
-
-            if a not in points and b not in points and c not in points:
-                constraints.remove(constraint)
-                continue
-
-            if a in points:
-                for i, child_points in enumerate(children_points):
-                    if b in child_points:
-                        requirements.add(i)
-                        if c not in child_points:
-                            constraints.remove(constraint)
-                            break
-            elif b in points:
-                for i, child_points in enumerate(children_points):
-                    if a in child_points:
-                        requirements.add(i)
-                        if c not in child_points:
-                            constraints.remove(constraint)
-                            break
-
-        assert len(requirements) <= 1
-        if len(requirements) != 1:
-            return None, constraints
-        return list(requirements)[0], constraints
-
-    def get_banned(self, constraints, points):
-
-        banned = set()
-
-        constraints = constraints.copy()
-
-        for constraint in constraints.copy():
-            a, b, c = constraint
-
-            for i, child in enumerate(self.children):
-                if isinstance(child, InteractiveLeaf):
-                    continue
-                children_points = [ch.points() for ch in child.children]
-
-                if c in points:
-                    for j in xrange(2):
-                        if a in children_points[j] and b in children_points[1 - j]:
-                            banned.add(i)
-                            constraints.remove(constraint)
-        return banned, constraints
-
     def sample_assignment(self, df, constraints, points, index=(), force_side=None):
 
-        logging.debug("Sampling assignment at index: %s, %s" % (str(index), str(constraints)))
+        logging.debug("Sampling assignment at index: %s" % (str(index)))
+        logging.debug("Constraints: %s" % str(constraints))
 
-        required, constraints = self.get_required(constraints, points)
-        banned, constraints = self.get_banned(constraints, points)
-
-        logging.debug("Required to go into child: %s" % str(required))
-        logging.debug("Banned from going into child: %s" % str(banned))
+        logging.debug("Points: %s" % (str([c.points() for c in self.children])))
+        logging.debug("Required: %s" % (str([c.is_required(constraints, points) for c in self.children])))
+        logging.debug("Path Required: %s" % (str([c.is_path_required(constraints, points) for c in self.children])))
+        logging.debug("Banned: %s" % (str([c.is_banned(constraints, points) for c in self.children])))
+        logging.debug("Path Banned: %s" % (str([c.is_path_banned(constraints, points) for c in self.children])))
 
         counts = [c.point_count() for c in self.children]
-        total = float(sum(counts))
+        total = sum(counts)
+
+        for idx, child in enumerate(self.children):
+            if child.is_required(constraints, points):
+                logging.debug("Found required child: %u" % idx)
+                constraints = self.prune_constraints(constraints, points, idx)
+                assignment, p = self.children[idx].sample_assignment(df,
+                                                                     constraints,
+                                                                     points,
+                                                                     index=index + (idx,))
+                return assignment, p
+
         left_prob = counts[0] / total
         u = np.random.random()
-        if required is not None:
-            idx = required
-            choice = self.children[required]
-            prob = 0
-        else:
-            if force_side is not None:
-                idx = force_side
+
+
+        choice = None
+
+        for i, child in enumerate(self.children):
+            if child.is_path_required(constraints, points):
+                idx = i
+                choice = child
+                break
+            if child.is_path_banned(constraints, points):
+                idx = 1 - i
                 choice = self.children[idx]
-            elif u < left_prob:
+                break
+
+        if choice is None:
+            if u < left_prob:
                 choice = self.left
                 idx = 0
             else:
                 choice = self.right
                 idx = 1
-            prob = np.log(counts[idx]) - np.log(total)
 
-        no_diverge_prob = (df.cumulative_divergence(self.time) - df.cumulative_divergence(choice.time)) / \
-            counts[idx]
-        u = np.random.random()
-        if required is not None:
-            assignment, p = choice.sample_assignment(df, constraints, points, index=index + (idx,))
-            return assignment, prob + p
-        if idx in banned:
+        prob = np.log(counts[idx]) - np.log(total)
+
+        if choice.is_banned(constraints, points):
+            logging.debug("Found path banned child: %u" % idx)
             sampled_time, _ = df.sample(self.time, choice.time, counts[idx])
             diverge_prob = df.log_pdf(sampled_time, self.time, counts[idx])
             prob += diverge_prob
             return (index + (idx,), sampled_time), prob
+
+        constraints = self.prune_constraints(constraints, points, idx)
+
+
+        no_diverge_prob = (df.cumulative_divergence(self.time) - df.cumulative_divergence(choice.time)) / \
+            counts[idx]
+        u = np.random.random()
         if u < np.exp(no_diverge_prob):
             prob += no_diverge_prob
             assignment, p = choice.sample_assignment(df, constraints, points, index=index + (idx,))
@@ -254,3 +264,9 @@ class InteractiveLeaf(InteractiveNode, Leaf):
 
     def copy(self):
         return InteractiveLeaf(None, self.point, self.state)
+
+    def is_required(self, constraints, points):
+        return False
+
+    def is_banned(self, constraints, points):
+        return True
