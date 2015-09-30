@@ -1,4 +1,3 @@
-import scipy.stats as stats
 import numpy as np
 from theanify import theanify, Theanifiable
 from theano.tensor.shared_randomstreams import RandomStreams
@@ -9,7 +8,7 @@ class LikelihoodModel(Theanifiable):
     def __init__(self, **parameters):
         super(LikelihoodModel, self).__init__()
         for param in self.get_parameters():
-            assert param in parameters
+            assert param in parameters, "Missing parameter: %s" % param
         self.parameters = parameters
 
     def __getattr__(self, key):

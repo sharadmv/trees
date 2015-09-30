@@ -12,9 +12,15 @@ def load(dataset_name):
 def load_zoo():
     X = []
     y = []
+    removed_frog = False
     with open('data/zoo/zoo.data') as fp:
         for line in fp:
             line = line.strip().split(',')
+            if line[0] in ('goat', 'oryx', 'toad'):
+                continue
+            if not removed_frog and line[0] == 'frog':
+                removed_frog = True
+                continue
             X.append(map(float, line[1:-1]))
             y.append(line[0])
     X = np.array(X)

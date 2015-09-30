@@ -24,7 +24,6 @@ class InteractiveDirichletDiffusionTree(DirichletDiffusionTree):
             if a in my_points and b in my_points and c in my_points:
                 continue
             filtered_constraints.append(constraint)
-        logging.debug("Sampling points: %s" % str(points))
         return self.root.sample_assignment(self.df, filtered_constraints, points)
 
     def add_constraint(self, constraint, X):

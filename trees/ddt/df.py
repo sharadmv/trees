@@ -27,10 +27,10 @@ class DivergenceFunction(Theanifiable):
     def get_parameters(self):
         raise NotImplementedError
 
-    @theanify(T.dscalar('t'), T.dscalar('t1'), T.dscalar('m'))
-    def log_pdf(self, t, t1, m):
-        z = (self.cumulative_divergence(t1) - self.cumulative_divergence(t)) / m
-        p = T.log(self.divergence(t)) -  T.log(m)
+    @theanify(T.dscalar('t1'), T.dscalar('t2'), T.dscalar('m'))
+    def log_pdf(self, t1, t2, m):
+        z = (self.cumulative_divergence(t1) - self.cumulative_divergence(t2)) / m
+        p = T.log(self.divergence(t2)) -  T.log(m)
         return z + p
 
 class Inverse(DivergenceFunction):

@@ -1,36 +1,33 @@
 import logging
-import mpld3
-import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
-
-from node import Node
 from .. import Tree
 
 class DirichletDiffusionTree(Tree):
 
-    def __init__(self, df, likelihood_model):
-        self.df = df
-        self.likelihood_model = likelihood_model
-        self.root = None
+    def __init__(self, root=None, constraints=[], **params):
+        super(DirichletDiffusionTree, self).__init__(root=root,
+                                                     constraints=constraints,
+                                                     **params)
         self._marg_log_likelihood = None
 
-    def initialize_assignments(self, X):
+    def initialize_from_data(self, X):
         N, _ = X.shape
-        self.root = Node.construct(set(xrange(N)), X)
-        self.root.time = 0.0
-        self.root.state = self.likelihood_model.mu0
+        points = set(xrange(N))
+        super(DirichletDiffusionTree, self).initialize_assignments(points)
+        for node in self.dfs():
+            if node.is_root():
+                node.set_state('time', 0.0)
+                node.set_state('latent_value', self.likelihood_model.mu0)
+            elif node.is_leaf():
+                node.set_state('time', 1.0)
+                node.set_state('latent_value', X[node.point])
+            else:
+                node.set_state('time', min(n.get_state('time') for n in node.children) / 2.0)
+                node.set_state('latent_value', sum(n.get_state('latent_value') for n in node.children) /
+                               float(len(node.children)))
 
-    def copy(self):
-        ddt = DirichletDiffusionTree(self.df, self.likelihood_model)
-        ddt.root = self.root.copy()
-        return ddt
-
-    def initialize_assignments(self, X):
-        N, _ = X.shape
-        self.root = Node.construct(set(xrange(N)), X)
-        self.root.time = 0
-        self.root.state = self.likelihood_model.mu0
+    def get_assignment(self, node):
+        return (node.get_index(), node.get_state('time'))
 
     def marg_log_likelihood(self):
         if self._marg_log_likelihood is None:
@@ -39,94 +36,125 @@ class DirichletDiffusionTree(Tree):
             self._marg_log_likelihood = tree_structure + data_structure
         return self._marg_log_likelihood
 
-    def dfs(self):
-        assert self.root is not None
-        yield self.root
-        s = set(self.root.children)
-        while len(s) > 0:
-            child = s.pop()
-            yield child
-            if not isinstance(child, Leaf):
-                s.update(child.children)
+    def sample_assignment(self, node=None, constraints=None, points=None, index=None):
+        node = node or self.root
+        constraints = constraints or self.constraints
+        points = points or set()
+        index = index or ()
+        df = self.df
 
-    def get_node(self, index):
-        return self.root.get_node(index)
+        logging.debug("Sampling assignment at index: %s" % str(index))
 
-    def attach_node(self, node, assignment):
-        return self.root.attach_node(node, assignment)
+        counts = [c.leaf_count() for c in node.children]
+        logging.debug("Path counts: %s" % str(counts))
+        total = float(sum(counts))
 
-    def point_index(self, point):
-        return self.root.point_index(point)
+        for idx, child in enumerate(node.children):
+            if child.is_required(constraints, points):
+                constraints = node.prune_constraints(constraints, points, idx)
+                logging.debug("Child is required: %u" % idx)
+                return self.sample_assignment(node=node.children[idx],
+                                                    constraints=constraints,
+                                                    points=points,
+                                                    index=index + (idx,))
+        left_prob = counts[0] / total
+        u = np.random.random()
+        choice = None
 
-    def uniform_index(self, u, ignore_depth=0):
-        return self.root.uniform_index(u, ignore_depth=ignore_depth)
+        for i, child in enumerate(node.children):
+            if child.is_path_required(constraints, points):
+                idx = i
+                choice = child
+                break
+            if child.is_path_banned(constraints, points):
+                idx = 1 - i
+                choice = node.children[idx]
+                break
 
-    def sample_assignment(self, points=None):
-        return self.root.sample_assignment(self.df)
-
-    def log_prob_assignment(self, assignment):
-        return self.root.log_prob_assignment(self.df, assignment)
-
-    def choice(self, ignore_depth=0):
-        return self.uniform_index(np.random.random(), ignore_depth=ignore_depth)
-
-    def update_latent(self):
-        self.root.update_latent(self.likelihood_model)
-
-    def mrca(self, a, b, c):
-        a_idx = self.point_index(a)[1][0]
-        b_idx = self.point_index(b)[1][0]
-        c_idx = self.point_index(c)[1][0]
-        idx = ()
-        i = 0
-        while True:
-            if a_idx[i] == b_idx[i] and a_idx[i] == c_idx[i]:
-                idx += (a_idx[i],)
-                i += 1
+        if choice is None:
+            if u < left_prob:
+                choice = node.children[0]
+                idx = 0
             else:
-                return self[idx]
+                choice = node.children[1]
+                idx = 1
 
-    def __getitem__(self, key):
-        return self.root[key]
+        prob = np.log(counts[idx]) - np.log(total)
+        logging.debug("Branching: %f" % prob)
 
-    def plot_mpld3(self, y):
-        fig, ax = plt.subplots(1, 1)
-        g, nodes, node_labels = self.plot(ax=ax)
-        labels = []
-        for node in g.nodes_iter():
-            if node.is_leaf():
-                labels.append("<div class='tree-label'><div class='tree-label-text'>%s</div></div>"
-                              % y[node.point])
-            else:
-                labels.append("<div class='tree-label'><div class='tree-label-text'>%f, %s</div></div>"
-                              % (node.time, str(node.state)))
-        tooltip = mpld3.plugins.PointHTMLTooltip(nodes, labels=labels)
-        mpld3.plugins.connect(fig, tooltip)
-        tooltip = mpld3.plugins.PointHTMLTooltip(node_labels, labels=labels)
-        mpld3.plugins.connect(fig, tooltip)
-        plt.axis('off')
-        return fig
+        node_time = node.get_state('time')
+        choice_time = choice.get_state('time')
 
-    def plot(self, ax=None):
-        g = nx.DiGraph()
-        assert self.root is not None
+        if choice.is_banned(constraints, points):
+            logging.debug("Child is banned")
+            sampled_time, _ = df.sample(node_time, choice_time, counts[idx])
+            diverge_prob = df.log_pdf(node_time, sampled_time, counts[idx])
+            logging.debug("Diverging at %f: %f" % (sampled_time, diverge_prob))
+            prob += diverge_prob
+            return (index + (idx,), sampled_time), prob
 
-        def add_nodes(node):
-            if not node.is_leaf():
-                for child in node.children:
-                    g.add_edge(node, child)
-                    add_nodes(child)
+        constraints = node.prune_constraints(constraints, points, idx)
 
-        add_nodes(self.root)
+        no_diverge_prob = (df.cumulative_divergence(node_time) - df.cumulative_divergence(choice_time)) / \
+            counts[idx]
+        u = np.random.random()
+        if u < np.exp(no_diverge_prob):
+            logging.debug("Not diverging: %f" % no_diverge_prob)
+            prob += no_diverge_prob
+            assignment, p = self.sample_assignment(node=node.children[idx],
+                                                   constraints=constraints,
+                                                   points=points,
+                                                   index=index + (idx,))
+            return assignment, prob + p
+        else:
+            sampled_time, _ = df.sample(node_time, choice_time, counts[idx])
+            diverge_prob = df.log_pdf(sampled_time, node_time, counts[idx])
+            logging.debug("Diverging at %f: %f" % (sampled_time, diverge_prob))
+            prob += diverge_prob
+            return (index + (idx,), sampled_time), prob
 
-        pos = nx.graphviz_layout(g, prog='dot', args='-Granksep=100.0')
-        labels = {n: n.point_count() if n.is_leaf() else "" for n in g.nodes()}
-        node_size = [120 if n.is_leaf() else 40 for n in g.nodes()]
-        nodes = nx.draw_networkx_nodes(g, pos,
-                               node_color='b',
-                               node_size=node_size,
-                               alpha=0.8, ax=ax)
-        nx.draw_networkx_edges(g, pos,
-                                alpha=0.8, arrows=False, ax=ax)
-        labels = nx.draw_networkx_labels(g, pos, labels, font_size=10, font_color='w', ax=ax)
-        return g, nodes, labels
+    def log_prob_assignment(self, assignment, node=None):
+        node = node or self.root
+
+        (idx, time) = assignment
+        assert idx is not ()
+
+        df = self.df
+
+
+
+
+        first, rest = idx[0], idx[1:]
+
+        counts = [c.leaf_count() for c in node.children]
+        total = float(sum(counts))
+        prob = np.log(counts[first]) - np.log(total)
+        logging.debug("Branching prob: %f" % prob)
+
+        node_time = node.get_state('time')
+
+        if len(idx) == 1:
+            diverge_prob = df.log_pdf(node_time, time, counts[first])
+            logging.debug("Diverging at %f: %f" % (time, diverge_prob))
+            return prob + diverge_prob
+
+        choice = node.children[first]
+        choice_time = choice.get_state('time')
+
+        no_diverge_prob = (df.cumulative_divergence(node_time) - df.cumulative_divergence(choice_time)) / \
+            counts[first]
+        logging.debug("Not diverging: %f" % no_diverge_prob)
+
+        return prob + no_diverge_prob + self.log_prob_assignment((rest, time), node=node.children[first])
+
+    def assign_node(self, node, assignment):
+        (idx, time) = assignment
+        assignee = self.point_index(idx)
+        assignee.attach(node)
+        node.set_state('time', time)
+
+    def get_parameters(self):
+        return {
+            "df",
+            "likelihood_model",
+        }

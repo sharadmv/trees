@@ -1,0 +1,184 @@
+\title{Interactive Hierarchical Clustering}
+\author{
+  Sharad Vikram
+}
+\date{\today}
+
+\documentclass[12pt]{article}
+\usepackage{amsmath, amssymb}
+\usepackage{hyperref}
+\usepackage{natbib}
+\bibliographystyle{unsrtnat}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{property}[theorem]{Property}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+Hierarchical clustering is a very popular method in unsupervised learning.
+The basic idea in hierarchical clustering is to find a hierarchy, or tree,  of partitions
+over a set of data points, producing a dendrogram.
+This is often more useful than just a flat clustering of the data because
+it provides granular information at bottom of the tree and coarse
+information near the top. Data is often also hierarchical in nature. 
+For example, data from different
+species can often take the form of an evolutionary or phylogenetic tree.
+
+Algorithms for hierarchical clustering often fall under an \emph{agglomerative}
+or \emph{divisive} scheme. Agglomerative clustering algorithms
+build a hierarchy from the bottom-up. This means that clusters of data
+points are merged until we have a single cluster containing all the data.
+Divisive clustering is top-down, starting with a single cluster
+containing all the data, and recursively splits the clusters
+until each cluster contains a single data point. Both of these methodologies
+produce binary trees.
+
+The most popular methods for hierarchical clustering are agglomerative.
+They are greedy algorithms which first assume a distance measure
+between data points.
+On each iteration of the algorithms, they find the two closest clusters
+and merge them together.
+The main difference between the algorithms
+is that they each assume a different distance measure between clusters.
+In single-linkage clustering, the distance between clusters is the 
+minimum distance between any two points in the clusters.
+In average-linkage clustering, the distance between clusters is the
+average distance between each pair of points in the clusters.
+Finally, in complete-linkage clustering, the distance between clusters
+is the maximum distance between any two points in the clusters.
+
+Several issues exist with these algorithms. Most noticeably, it is very hard
+to judge the quality of a hierarchy. However, interaction can solve this problem.
+If a human is able to identify errors in a hierarchy, we could modify the hierarchy
+to fix the error and hopefully produce a better hierarchy in the process.
+
+In this paper, we propose an interactive algorithm to improve the quality of
+hierarchies. The main philosophy of the algorithm is that we start off with an initial
+hierarchy, perhaps one produced by an agglomerative clustering algorithm. 
+The interactive algorithm will produce ``candidate hierarchies'' that can be 
+examined by a human.
+A human may then choose to point out an error in a candidate hierarchy.
+The algorithm will then continue producing candidates
+without making the same error again.
+
+Assuming that a human knows the correct underlying hierarchy of the data,
+an interactive algorithm can guarantee improvement in the quality of hierarchies
+over time, and eventually converge to the sole correct hierarchy,
+once enough interactions are provided.
+
+\section{Interactive learning}
+Interaction is a powerful means of informing and improving machine learning algorithms.
+We define the following model for interactive learning.
+Let $\theta \in \Theta$ be a model we desire to learn 
+($\Theta$ is the space of all possible models).
+An interaction will take the form of a human
+pointing out an error in our model, which results in
+eliminating all possible models where this error occurs.
+Thus, interactions act to constrain the model space $\Theta$.
+Let $i$ be an interaction, or a constraint function
+on a model $\theta$, i.e. $i(\theta)$ will return true
+if $\theta$ satisfies $i$'s constraint and false if
+it doesn't. This is equivalent to constraining model space 
+, i.e. $\theta \in \{\theta' \in \Theta | i(\theta')\}$.
+We assume that there exists a human-optimal $\theta^* \in \Theta$,
+such that $i(\theta^*)$ is true for all $i$.
+
+We adopt an online setting for interactive learning.
+We begin with an unconstrained model $\theta_\emptyset$ where no interactions
+have been provided. This model is learned from our data $D$ by
+an algorithm $f$. Note that $f$
+can be deterministic or stochastic. We also require an
+update function $g$, which takes our data $D$,
+our current model under constraint set $I$, and
+a new interactive constraint $i$ and returns a new
+model that satisfies the constraint set $I + \{i\}$.
+This can be expressed concisely as:
+
+\begin{enumerate}
+\item Construct $\theta_\emptyset = f(D)$.\\
+\item Repeat for $t = 1\ldots$
+\begin{enumerate}
+    \item Receive interaction $i_t$.
+    \item Update $\theta_{I + \{i_t\}} = g(\mathcal{D}, \theta_I, i_t)$.
+\end{enumerate}
+\end{enumerate}
+
+INSERT THEORY HERE
+
+\section{Odd-one-out Interaction}
+
+Our goal is to learn a hierarchy over a set of data, so the interaction
+will involve presenting a human with our current best model, which is 
+hierarchy itself.
+
+The types of errors a human can point out in a hierarchy can vary greatly.
+A human might point out that a datum does not belong in a subtree with another datum.
+Or, a human might say that a data point belongs in a different subtree.
+When thinking about types of possible interactions, there is a trade-off between
+the usefulness of the interaction and the ease of which a human can provide it.
+Consider the following trivial interaction. A human is presented with a candidate hierarchy and
+is asked to identify whether it is the correct hierarchy. 
+This is a relatively easy interaction
+for the human but provides little information to a hierarchical clustering algorithm
+(it specifically eliminates one point from the model space).
+Now consider this interaction on other side of the spectrum. A human is provided a 
+candidate hierarchy and is asked to find all mistakes in the tree.
+Now, an interactive algorithm can trivially return this fixed hierarchy
+as the optimal answer, but this interaction is almost impossible to perform for a human.
+We thus desire an interaction that is both informative and easy for a human to perform.
+We now present the odd-one-out interaction.
+
+An odd-one-out (OOU) triple is a set of three data $\{a, b, c\}$, such that
+$c$ is the odd one out. For example, if we are building a hierarchy over animals, a human
+may provide the feedback $\{\text{dog}, \text{cat}, \text{fish}\}$. This can be interpreted
+as saying a dog and cat are more similar to each other than they are to fish.
+The OOU triple is a valuable form of interaction for several reasons.
+First, note that this is a qualitative measure of relative similarity, which can often
+be intuitive to a human. Second, an OOU triple provides a hard constraint on a hierarchy. 
+For an OOU triple $\{a, b, c\}$, $a$ cannot be in a subtree with $c$ if $b$ is not also in that
+subtree, and similarly, $b$ cannot be in a subtree with $c$ if $a$ is also not in the subtree.
+Finally, OOU triples can be produced from \emph{induced hierarchies}. Suppose we have a subset
+of the data of size $k$. We can produce the induced hierarchy by removing 
+all nodes from the original hierarchy that aren't common ancestors of the points in our
+subset. OOU triples produced from an induced hierarchy will also hold for the original hierarchy.
+Thus, a human does not need to view the entirety of a hierarchy to produce useful feedback, but
+can instead work with induced hierarchies over subsets of the data. This is valuable when
+datasets are large, resulting in complicated hierarchies that can be difficult to interpret
+for humans.
+
+Another aspect is that there are a finite set of possible
+OOU triples for a given hierarchy.
+This means that with a finite amount of interactions,
+we are left with a single optimal hierarchy.
+
+\section{Incorporating OOU Constraints}
+The next step in using such OOU constraints is to incorporate them into a hierarchical
+clustering algorithm, i.e. define a $g$ function.
+
+\subsection{Dirichlet Diffusion Tree}
+The Dirichlet Diffusion Tree (DDT) is a Bayesian nonparametric prior on 
+binary hierarchies.
+It assumes data are generated by a diffusion process
+where a datum will follow a random walk taken by
+previous data, but may choose to diverge
+and walk independently and end up at a
+particular leaf node.
+
+We perform inference in the Dirichlet Diffusion Tree 
+using an Metropolis-Hastings method closely related to 
+that of \citet{Neal2003}. 
+Given a DDT, we select
+a random node and detach its parent from the tree.
+We then attach the parent to the tree
+according to DDT's generative process.
+
+\bibliography{paper}
+
+\end{document}

@@ -123,57 +123,6 @@ class InteractiveNonTerminal(NonTerminal, InteractiveNode):
         right_node.parent = node
         return node
 
-    def reconfigure(self, df, constraints, new_constraint):
-        children_points = [c.points() for c in self.children]
-        left_points, right_points = children_points[0], children_points[1]
-        points = left_points | right_points
-
-        a, b, c = new_constraint
-        if (a in left_points and b in left_points) or (a in right_points and b in right_points):
-            return
-
-        filtered_constraints = set()
-        for constraint in constraints:
-            (a2, b2, c2) = constraint
-            if a2 not in points and b2 not in points and c2 not in points:
-                continue
-            filtered_constraints.add(constraint)
-
-        graph = self.construct_constraint_graph(points, filtered_constraints)
-
-        if a in left_points and c in left_points:
-            incorrect = a
-            move_into = 1
-            points = left_points
-        elif a in right_points and c in right_points:
-            incorrect = a
-            move_into = 0
-            points = right_points
-        elif b in left_points and c in left_points:
-            incorrect = b
-            move_into = 1
-            points = left_points
-        elif b in right_points and c in right_points:
-            incorrect = b
-            move_into = 0
-            points = right_points
-
-        move_points = set(n for n in nx.node_connected_component(graph, incorrect) if n in points)
-        nodes_to_move = [self.point_index(n) for n in move_points]
-        nodes_to_move.sort(key=lambda x: len(x[1][0]))
-
-        for node, (_, _) in nodes_to_move:
-            if self.children[1 - move_into].point_count() == 1:
-                into_node = self.children[move_into]
-            else:
-                into_node = self
-            parent = node.detach_node()
-            assignment, _= into_node.sample_assignment(df,
-                                                  filtered_constraints,
-                                                  parent.points(),
-                                                  force_side=move_into)
-            into_node.attach_node(parent, assignment)
-
     def copy(self):
         node = InteractiveNonTerminal(self.left.copy(), self.right.copy(), None, self.state, self.time)
         node.left.parent = node
@@ -182,21 +131,11 @@ class InteractiveNonTerminal(NonTerminal, InteractiveNode):
 
     def sample_assignment(self, df, constraints, points, index=(), force_side=None):
 
-        logging.debug("Sampling assignment at index: %s" % (str(index)))
-        logging.debug("Constraints: %s" % str(constraints))
-
-        logging.debug("Points: %s" % (str([c.points() for c in self.children])))
-        logging.debug("Required: %s" % (str([c.is_required(constraints, points) for c in self.children])))
-        logging.debug("Path Required: %s" % (str([c.is_path_required(constraints, points) for c in self.children])))
-        logging.debug("Banned: %s" % (str([c.is_banned(constraints, points) for c in self.children])))
-        logging.debug("Path Banned: %s" % (str([c.is_path_banned(constraints, points) for c in self.children])))
-
         counts = [c.point_count() for c in self.children]
         total = sum(counts)
 
         for idx, child in enumerate(self.children):
             if child.is_required(constraints, points):
-                logging.debug("Found required child: %u" % idx)
                 constraints = self.prune_constraints(constraints, points, idx)
                 assignment, p = self.children[idx].sample_assignment(df,
                                                                      constraints,
@@ -206,8 +145,6 @@ class InteractiveNonTerminal(NonTerminal, InteractiveNode):
 
         left_prob = counts[0] / total
         u = np.random.random()
-
-
         choice = None
 
         for i, child in enumerate(self.children):
@@ -231,14 +168,12 @@ class InteractiveNonTerminal(NonTerminal, InteractiveNode):
         prob = np.log(counts[idx]) - np.log(total)
 
         if choice.is_banned(constraints, points):
-            logging.debug("Found path banned child: %u" % idx)
             sampled_time, _ = df.sample(self.time, choice.time, counts[idx])
             diverge_prob = df.log_pdf(sampled_time, self.time, counts[idx])
             prob += diverge_prob
             return (index + (idx,), sampled_time), prob
 
         constraints = self.prune_constraints(constraints, points, idx)
-
 
         no_diverge_prob = (df.cumulative_divergence(self.time) - df.cumulative_divergence(choice.time)) / \
             counts[idx]
