@@ -15,10 +15,21 @@ class DivergenceFunction(Theanifiable):
         if key in self.parameters:
             return self.parameters[key]
 
+    @theanify(T.dscalar('t'))
+    def log_divergence(self, t):
+        return T.log(self.divergence(t))
+
     def divergence(self, t):
         raise NotImplementedError
 
     def cumulative_divergence(self, t):
+        raise NotImplementedError
+
+    @theanify(T.dscalar('s'), T.dscalar('t'), T.dscalar('m'))
+    def no_divergence(self, s, t, m):
+        return T.exp(self.log_no_divergence(s, t, m))
+
+    def log_no_divergence(self, s, t, m):
         raise NotImplementedError
 
     def inverse_cumulative(self, y, t1, t2):
@@ -42,6 +53,10 @@ class Inverse(DivergenceFunction):
     @theanify(T.dscalar('t'))
     def cumulative_divergence(self, t):
         return -self.c * T.log(1 - t)
+
+    @theanify(T.dscalar('s'), T.dscalar('t'), T.dscalar('m'))
+    def log_no_divergence(self, s, t, m):
+        return self.cumulative_divergence(s) - self.cumulative_divergence(t) - T.log(m)
 
     @theanify(T.dscalar('t'), T.dscalar('t1'), T.dscalar('m'))
     def cdf(self, t, t1, m):

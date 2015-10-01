@@ -22,12 +22,15 @@ class GaussianLikelihoodModel(LikelihoodModel):
         super(GaussianLikelihoodModel, self).__init__(**parameters)
         self.sigma0inv = np.linalg.inv(self.sigma0)
         self.D = self.sigma.shape[0]
+        self.compile()
 
-    def transition_probability(self, child, parent):
+    def transition_probability(self, parent, child):
+        child_latent, child_time = child.get_state('latent_value'), child.get_state('time')
         if parent is None:
-            return self.calculate_transition(child.state, np.zeros(self.D), child.time, -1)
-        assert parent.time < child.time, (parent.time, child.time)
-        return self.calculate_transition(child.state, parent.state, child.time, parent.time)
+            return self.calculate_transition(child_latent, self.mu0, child_time, -1)
+        parent_latent, parent_time = parent.get_state('latent_value'), parent.get_state('time')
+        assert parent_time < child_time, (parent_time, child_time)
+        return self.calculate_transition(child_latent, parent_latent, child_time, parent_time)
 
     @theanify(T.dvector('state'), T.dvector('parent'), T.dscalar('time'), T.dscalar('parent_time'))
     def calculate_transition(self, state, parent, time, parent_time):
@@ -46,19 +49,21 @@ class GaussianLikelihoodModel(LikelihoodModel):
         x = T.dot(x, T.sqrt(e)[:, None] * v)
         return x + mean
 
-    def sample_transition(self, time, parent, children):
+    def sample_transition(self, node, parent):
+        children = node.children
+        time = node.get_state('time')
         if parent is None:
             mu0 = self.mu0
             sigma0 = self.sigma0
             sigma0inv = self.sigma0inv
         else:
-            mu0 = parent.state
-            sigma0 = self.sigma * (time - parent.time)
+            mu0 = parent.get_state('latent_value')
+            sigma0 = self.sigma * (time - parent.get_state('time'))
             sigma0inv = np.linalg.inv(sigma0)
 
-        mus = [c.state for c in children]
+        mus = [c.get_state('latent_value') for c in children]
 
-        sigmas = [self.sigma * (c.time - time) for c in children]
+        sigmas = [self.sigma * (c.get_state('time') - time) for c in children]
 
         sigmas_inv = [np.linalg.inv(s) for s in sigmas]
 

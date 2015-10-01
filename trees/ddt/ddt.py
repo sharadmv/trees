@@ -11,6 +11,7 @@ class DirichletDiffusionTree(Tree):
         self._marg_log_likelihood = None
 
     def initialize_from_data(self, X):
+        X = np.array(X)
         N, _ = X.shape
         points = set(xrange(N))
         super(DirichletDiffusionTree, self).initialize_assignments(points)
@@ -20,7 +21,7 @@ class DirichletDiffusionTree(Tree):
                 node.set_state('latent_value', self.likelihood_model.mu0)
             elif node.is_leaf():
                 node.set_state('time', 1.0)
-                node.set_state('latent_value', X[node.point])
+                node.set_state('latent_value', X[node.point].ravel())
             else:
                 node.set_state('time', min(n.get_state('time') for n in node.children) / 2.0)
                 node.set_state('latent_value', sum(n.get_state('latent_value') for n in node.children) /
@@ -29,11 +30,32 @@ class DirichletDiffusionTree(Tree):
     def get_assignment(self, node):
         return (node.get_index(), node.get_state('time'))
 
+    def calculate_node_likelihood(self, node=None):
+        node = node or self.root
+
+        if node.is_leaf():
+            return 1, 0, self.likelihood_model.transition_probability(node.parent, node)
+
+        node_time = node.get_state('time')
+        left_child, right_child = node.children
+        path_count, tree_prob, data_prob = self.calculate_node_likelihood(node=left_child)
+
+        if not node.is_root():
+            tree_prob += self.df.log_no_divergence(node.parent.get_state('time'), node_time, path_count)
+            tree_prob += self.df.log_divergence(node_time)
+        data_prob += self.likelihood_model.transition_probability(node.parent, node)
+
+        right_path_count, right_tree_prob, right_data_prob = self.calculate_node_likelihood(node=right_child)
+        return path_count + right_path_count, tree_prob + right_tree_prob, data_prob + right_data_prob
+
+    def calculate_marg_log_likelihood(self):
+        assert self.root is not None
+        _, tree_structure, data_structure = self.calculate_node_likelihood()
+        self._marg_log_likelihood = tree_structure + data_structure
+
     def marg_log_likelihood(self):
         if self._marg_log_likelihood is None:
-            assert self.root is not None
-            _, tree_structure, data_structure = self.root.log_likelihood(self.df, self.likelihood_model, self.root.time)
-            self._marg_log_likelihood = tree_structure + data_structure
+            self.calculate_marg_log_likelihood()
         return self._marg_log_likelihood
 
     def sample_assignment(self, node=None, constraints=None, points=None, index=None):
@@ -121,9 +143,6 @@ class DirichletDiffusionTree(Tree):
 
         df = self.df
 
-
-
-
         first, rest = idx[0], idx[1:]
 
         counts = [c.leaf_count() for c in node.children]
@@ -149,9 +168,18 @@ class DirichletDiffusionTree(Tree):
 
     def assign_node(self, node, assignment):
         (idx, time) = assignment
-        assignee = self.point_index(idx)
+        assignee = self.get_node(idx)
         assignee.attach(node)
         node.set_state('time', time)
+
+    def sample_latent(self):
+        for node in self.dfs():
+            if not node.is_leaf():
+                lv = self.likelihood_model.sample_transition(node, node.parent)
+                node.set_state('latent_value', lv)
+
+    def node_as_string(self, node):
+        return str(node.get_state('time'))
 
     def get_parameters(self):
         return {

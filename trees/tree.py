@@ -33,6 +33,9 @@ class Tree(object):
         tree = self.__class__(root=self.root.copy(), **self.parameters.copy())
         return tree
 
+    def node_as_string(self, node):
+        return str(node.state)
+
     def choice(self):
         choice = None
         i = 0
@@ -295,9 +298,6 @@ class TreeNode(object):
         parent.add_child(node)
         node.add_child(self)
 
-    def state_as_string(self):
-        return str(self.state)
-
     def is_path_banned(self, constraints, points):
         my_points = self.points()
 
@@ -384,9 +384,6 @@ class TreeLeaf(TreeNode):
 
     def leaf_count(self):
         return 1
-
-    def state_as_string(self):
-        return str(self.point)
 
     def is_required(self, points, constraints):
         return False
