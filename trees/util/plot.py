@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import networkx as nx
+import mpld3 as md3
 
 def plot_tree(tree, mpld3=False, ax=None, y=None):
     g = nx.DiGraph()
@@ -12,9 +13,9 @@ def plot_tree(tree, mpld3=False, ax=None, y=None):
                 add_nodes(child)
 
     add_nodes(tree.root)
-
+    fig, ax = plt.subplots(1, 1)
     pos = nx.graphviz_layout(g, prog='dot', args='-Granksep=100.0')
-    labels = {n: tree.node_as_string(n) for n in g.nodes()}
+    labels = {n: tree.node_as_string(n) if not n.is_leaf() else str(n.point) for n in g.nodes()}
     node_size = [120 if n.is_leaf() else 40 for n in g.nodes()]
     nodes = nx.draw_networkx_nodes(g, pos,
                             node_color='b',
@@ -24,19 +25,16 @@ def plot_tree(tree, mpld3=False, ax=None, y=None):
                             alpha=0.8, arrows=False, ax=ax)
     node_labels = nx.draw_networkx_labels(g, pos, labels, font_size=10, font_color='r', ax=ax)
     if mpld3:
-        fig, ax = plt.subplots(1, 1)
         labels = []
         for node in g.nodes_iter():
             if node.is_leaf():
                 labels.append("<div class='tree-label'><div class='tree-label-text'>%s</div></div>"
                               % y[node.point])
             else:
-                labels.append("<div class='tree-label'><div class='tree-label-text'>%f, %s</div></div>"
+                labels.append("<div class='tree-label'><div class='tree-label-text'>%s</div></div>"
                               % str(node.state))
-        tooltip = mpld3.plugins.PointHTMLTooltip(nodes, labels=labels)
-        mpld3.plugins.connect(fig, tooltip)
-        tooltip = mpld3.plugins.PointHTMLTooltip(node_labels, labels=labels)
-        mpld3.plugins.connect(fig, tooltip)
+        tooltip = md3.plugins.PointHTMLTooltip(nodes, labels=labels)
+        md3.plugins.connect(fig, tooltip)
         plt.axis('off')
         return fig
 

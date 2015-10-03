@@ -4,11 +4,10 @@ import numpy as np
 
 class MetropolisHastingsSampler(object):
 
-    def __init__(self, tree, X, constraints=[]):
+    def __init__(self, tree, X):
         self.tree = tree
         self.X = X
         self.last_move = None
-        self.constraints = constraints
 
     def initialize_assignments(self):
         self.tree.initialize_from_data(self.X)
@@ -27,14 +26,14 @@ class MetropolisHastingsSampler(object):
         logging.debug("Backward Likelihood: %f" % backward_likelihood)
 
         points = set()
-        if len(self.constraints) > 0:
+        if len(tree.constraints) > 0:
             points = parent.points()
 
         time = float('inf')
 
         try_counter = 0
         while time > parent.children[0].get_state('time'):
-            (assignment, forward_likelihood) = tree.sample_assignment(constraints=self.constraints,
+            (assignment, forward_likelihood) = tree.sample_assignment(constraints=tree.constraints,
                                                                     points=points)
             (index, time) = assignment
             try_counter += 1

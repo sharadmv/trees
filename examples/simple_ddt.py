@@ -25,11 +25,11 @@ if __name__ == "__main__":
     mh = MetropolisHastingsSampler(ddt, X)
     mh.initialize_assignments()
 
-    plot_tree_2d(mh.tree, X)
-    plt.show()
+    # plot_tree_2d(mh.tree, X)
+    # plt.show()
 
-    for _ in tqdm(xrange(10000)):
-        mh.sample()
+    # for _ in tqdm(xrange(10000)):
+        # mh.sample()
 
-    plot_tree_2d(mh.tree, X)
-    plt.show()
+    # plot_tree_2d(mh.tree, X)
+    # plt.show()

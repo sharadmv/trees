@@ -30,7 +30,9 @@ class Tree(object):
         self.root = root
 
     def copy(self):
-        tree = self.__class__(root=self.root.copy(), **self.parameters.copy())
+        tree = self.__class__(root=self.root.copy(),
+                              constraints=self.constraints,
+                              **self.parameters.copy())
         return tree
 
     def node_as_string(self, node):
@@ -68,32 +70,36 @@ class Tree(object):
         combos = list(combinations(points, 3))
         constraints = set()
         for (a, b, c) in tqdm(combos):
-            if self.verify_constraint((a, b, c)):
-                constraints.add((a, b, c))
-                continue
-            if self.verify_constraint((b, c, a)):
+            (an, bn, cn) = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
+            a_b = self.mrca(an, bn)
+            a_c = self.mrca(an, cn)
+            b_c = self.mrca(bn, cn)
+            if a_b == a_c:
                 constraints.add((b, c, a))
-                continue
-            if self.verify_constraint((c, a, b)):
-                constraints.add((c, a, b))
-                continue
+            elif b_c == a_b:
+                constraints.add((a, c, b))
+            elif a_c == b_c:
+                constraints.add((a, b, c))
         return constraints
 
     def verify_constraint(self, constraint):
         (a, b, c) = constraint
-        ai = self.point_index(a)
-        bi = self.point_index(b)
-        ci = self.point_index(c)
+        (a, b, c) = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
+        mrca = self.mrca(a, b)
+        return mrca != self.mrca(mrca, c)
 
-        while True:
-            if ai[0] == bi[0]:
-                if ci[0] != ai[0]:
-                    return True
-                ai = ai[1:]
-                bi = bi[1:]
-                ci = ci[1:]
-            if ai[0] != bi[0]:
-                return False
+    def remove_point(self, i):
+        node = self.get_node(self.point_index(i))
+        node.detach()
+
+    def induced_subtree(self, points, constraints=None):
+        constraints = constraints or []
+        subtree = self.copy()
+        all_points = subtree.root.points()
+        for point in all_points:
+            if point not in points:
+                subtree.remove_point(point)
+        return subtree
 
     def verify_constraints(self, constraints):
         return all(self.verify_constraint(c) for c in constraints)
@@ -103,6 +109,7 @@ class Tree(object):
         for constraint in constraints:
             score += self.verify_constraint(constraint)
         return score
+        # return sum(self.verify_constraint(c) for c in constraints)
 
     def marg_log_likelihood(self):
         raise NotImplementedError
@@ -126,16 +133,13 @@ class Tree(object):
         return set()
 
     def mrca(self, a, b):
-        a_idx = self.point_index(a)
-        b_idx = self.point_index(b)
-        idx = ()
-        i = 0
-        while True:
-            if a_idx[i] == b_idx[i]:
-                idx += (a_idx[i],)
-                i += 1
-            else:
-                return self.get_node(idx)
+        node_path = set([a])
+        while not a.is_root():
+            a = a.parent
+            node_path.add(a)
+        while b not in node_path:
+            b = b.parent
+        return b
 
 class TreeNode(object):
 
@@ -272,7 +276,15 @@ class TreeNode(object):
 
     def detach(self):
         assert self.parent is not None, "Cannot detach root node"
-        assert self.parent.parent is not None, "Cannot detach depth 1 node"
+        if self.parent.is_root():
+            parent = self.parent
+            parent.remove_child(self)
+            assert len(parent.children) == 1
+            sibling = parent.children[0]
+            parent.remove_child(sibling)
+            for child in sibling.children:
+                parent.add_child(child)
+            return
 
         parent, grandparent = self.parent, self.parent.parent
         grandparent.remove_child(parent)
