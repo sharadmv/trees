@@ -14,16 +14,13 @@ if __name__ == "__main__":
     node2.add_child(leaf3)
     tree = Tree(node2)
 
-    plt.figure()
     plot_tree(tree)
     plt.show()
 
     p = leaf1.detach()
-    plt.figure()
     plot_tree(tree)
     plt.show()
 
     leaf3.attach(p)
-    plt.figure()
     plot_tree(tree)
     plt.show()

@@ -7,6 +7,8 @@ from functools import reduce
 from itertools import combinations
 from tqdm import tqdm
 
+from util import tree_cache
+
 class Tree(object):
 
     def __init__(self, root=None, constraints=set(), **params):
@@ -23,6 +25,9 @@ class Tree(object):
     def node(self, *args, **kwargs):
         return TreeNode(*args, **kwargs)
 
+    def get_assignment(self, node):
+        return (node.get_index(), node.state)
+
     def initialize_assignments(self, points):
         self.root = TreeNode.construct(points, self.constraints)
 
@@ -31,15 +36,13 @@ class Tree(object):
         a, b, c = constraint
         an, bn, cn = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
         subtree_root = self.mrca(an, self.mrca(bn, cn))
-        print "Receiving constraint: ", constraint, subtree_root.get_index()
         subtree_root.reconfigure(self.constraints)
         self.reconfigure_subtree(subtree_root, X)
 
     def reconfigure_subtree(self, subtree):
         pass
 
-    def set_root(self, root):
-        self.root = root
+    def set_root(self, root): self.root = root
 
     def copy(self):
         tree = self.__class__(root=self.root.copy(),
@@ -51,6 +54,10 @@ class Tree(object):
         return str(node.state)
 
     def choice(self):
+        """
+        Uses reservoir sampling to pick a node from a tree uniformly at random,
+        ignoring nodes that are depth 0 and 1.
+        """
         choice = None
         i = 0
         for node in self.dfs():
@@ -104,8 +111,7 @@ class Tree(object):
         node = self.get_node(self.point_index(i))
         node.detach()
 
-    def induced_subtree(self, points, constraints=None):
-        constraints = constraints or []
+    def induced_subtree(self, points):
         subtree = self.copy()
         all_points = subtree.root.points()
         for point in all_points:
@@ -159,12 +165,20 @@ class TreeNode(object):
         self.state = state or {}
         self.children = []
         self.parent = None
+        self.cache = {}
 
     def set_state(self, key, value):
         self.state[key] = value
 
     def get_state(self, key):
         return self.state[key]
+
+    def set_cache(self, key, value):
+        self.cache[key] = value
+        pass
+
+    def get_cache(self, key):
+        return self.cache[key]
 
     def reconfigure(self, constraints):
         points = self.points()
@@ -242,6 +256,7 @@ class TreeNode(object):
         node = TreeNode(
             state=self.state.copy(),
         )
+        node.cache = self.cache.copy()
         for child in self.children:
             child = child.copy()
             child.parent = node
@@ -255,6 +270,7 @@ class TreeNode(object):
         assert first < len(self.children)
         return self.children[first].get_node(rest)
 
+    @tree_cache("point_index")
     def point_index(self, point, index=()):
         for i, child in enumerate(self.children):
             if point in child.points():
@@ -269,6 +285,9 @@ class TreeNode(object):
     def is_leaf(self):
         return False
 
+    def dirty(self):
+        self.cache = {}
+
     def add_child(self, child):
         self.children.append(child)
         child.set_parent(self)
@@ -281,21 +300,30 @@ class TreeNode(object):
     def set_parent(self, parent):
         self.parent = parent
 
+    @tree_cache("node_count")
     def node_count(self):
         return 1 + sum(c.node_count() for c in self.children)
 
+    @tree_cache("leaf_count")
     def leaf_count(self):
         return sum(c.leaf_count() for c in self.children)
 
+    @tree_cache("points")
     def points(self):
         return reduce(set.union, (c.points() for c in self.children), set())
 
+    @tree_cache("nodes")
     def nodes(self):
         return reduce(set.union, (c.nodes() for c in self.children), set()) | self
 
     def detach(self):
+        """
+        Removes a subtree rooted at the current node from the tree.
+        Returns the root of the subtree (this node).
+        """
         assert self.parent is not None, "Cannot detach root node"
         if self.parent.is_root():
+            assert False, "Cannot detach depth 1 node"
             parent = self.parent
             parent.remove_child(self)
             assert len(parent.children) == 1
@@ -304,7 +332,6 @@ class TreeNode(object):
             for child in sibling.children:
                 parent.add_child(child)
             return
-
         parent, grandparent = self.parent, self.parent.parent
         grandparent.remove_child(parent)
 
@@ -315,7 +342,9 @@ class TreeNode(object):
             if sibling is not self:
                 parent.remove_child(sibling)
                 grandparent.add_child(sibling)
-        return parent
+        grandparent.make_dirty()
+        self.parent.remove_child(self)
+        return self
 
     def attach(self, node):
         assert self.parent is not None, "Cannot attach to root node"
@@ -326,8 +355,11 @@ class TreeNode(object):
             raise NotImplementedError("Haven't implemented attach for n-ary trees.")
 
         parent.remove_child(self)
-        parent.add_child(node)
-        node.add_child(self)
+        new_parent = TreeNode()
+        new_parent.add_child(self)
+        new_parent.add_child(node)
+        parent.add_child(new_parent)
+        new_parent.make_dirty()
 
     def is_path_banned(self, constraints, points):
         my_points = self.points()
@@ -345,6 +377,11 @@ class TreeNode(object):
         if self.parent is None:
             return ()
         return self.parent.get_index() + (self.parent.children.index(self),)
+
+    def make_dirty(self):
+        self.dirty()
+        if self.parent is not None:
+            self.parent.make_dirty()
 
     def is_path_required(self, constraints, points):
         my_points = self.points()

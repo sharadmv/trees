@@ -37,11 +37,11 @@ class DirichletDiffusionTree(Tree):
                 node.set_state('latent_value', sum(n.get_state('latent_value') for n in node.children) /
                                float(len(node.children)))
 
-    def get_assignment(self, node):
-        return (node.get_index(), node.get_state('time'))
-
     def calculate_node_likelihood(self, node=None):
         node = node or self.root
+
+        if 'likelihood' in node.cache:
+            return node.get_cache('likelihood')
 
         if node.is_leaf():
             return 1, 0, self.likelihood_model.transition_probability(node.parent, node)
@@ -56,7 +56,9 @@ class DirichletDiffusionTree(Tree):
         data_prob += self.likelihood_model.transition_probability(node.parent, node)
 
         right_path_count, right_tree_prob, right_data_prob = self.calculate_node_likelihood(node=right_child)
-        return path_count + right_path_count, tree_prob + right_tree_prob, data_prob + right_data_prob
+        result = path_count + right_path_count, tree_prob + right_tree_prob, data_prob + right_data_prob
+        node.set_cache('likelihood', result)
+        return result
 
     def calculate_marg_log_likelihood(self):
         assert self.root is not None
@@ -68,12 +70,15 @@ class DirichletDiffusionTree(Tree):
             self.calculate_marg_log_likelihood()
         return self._marg_log_likelihood
 
-    def sample_assignment(self, node=None, constraints=None, points=None, index=None):
+    def sample_assignment(self, node=None, constraints=None, points=None, index=None,
+                          state=None):
         node = node or self.root
         constraints = constraints or self.constraints
         points = points or set()
         index = index or ()
         df = self.df
+
+        state = state or {}
 
         logging.debug("Sampling assignment at index: %s" % str(index))
 
@@ -86,9 +91,10 @@ class DirichletDiffusionTree(Tree):
                 constraints = node.prune_constraints(constraints, points, idx)
                 logging.debug("Child is required: %u" % idx)
                 return self.sample_assignment(node=node.children[idx],
-                                                    constraints=constraints,
-                                                    points=points,
-                                                    index=index + (idx,))
+                                              constraints=constraints,
+                                              points=points,
+                                              index=index + (idx,),
+                                              state=state)
         left_prob = counts[0] / total
         u = np.random.random()
         choice = None
@@ -123,7 +129,8 @@ class DirichletDiffusionTree(Tree):
             diverge_prob = df.log_pdf(node_time, sampled_time, counts[idx])
             logging.debug("Diverging at %f: %f" % (sampled_time, diverge_prob))
             prob += diverge_prob
-            return (index + (idx,), sampled_time), prob
+            state['time'] = sampled_time
+            return (index + (idx,), state), prob
 
         constraints = node.prune_constraints(constraints, points, idx)
 
@@ -136,19 +143,23 @@ class DirichletDiffusionTree(Tree):
             assignment, p = self.sample_assignment(node=node.children[idx],
                                                    constraints=constraints,
                                                    points=points,
-                                                   index=index + (idx,))
+                                                   index=index + (idx,),
+                                                   state=state)
             return assignment, prob + p
         else:
             sampled_time, _ = df.sample(node_time, choice_time, counts[idx])
             diverge_prob = df.log_pdf(sampled_time, node_time, counts[idx])
             logging.debug("Diverging at %f: %f" % (sampled_time, diverge_prob))
             prob += diverge_prob
-            return (index + (idx,), sampled_time), prob
+            state['time'] = sampled_time
+            return (index + (idx,), state), prob
 
     def log_prob_assignment(self, assignment, node=None):
         node = node or self.root
 
-        (idx, time) = assignment
+
+        (idx, state) = assignment
+        time = state['time']
         assert idx is not ()
 
         df = self.df
@@ -174,13 +185,13 @@ class DirichletDiffusionTree(Tree):
             counts[first]
         logging.debug("Not diverging: %f" % no_diverge_prob)
 
-        return prob + no_diverge_prob + self.log_prob_assignment((rest, time), node=node.children[first])
+        return prob + no_diverge_prob + self.log_prob_assignment((rest, state), node=node.children[first])
 
     def assign_node(self, node, assignment):
-        (idx, time) = assignment
+        (idx, state) = assignment
         assignee = self.get_node(idx)
         assignee.attach(node)
-        node.set_state('time', time)
+        node.parent.state.update(state)
 
     def sample_latent(self):
         for node in self.dfs():

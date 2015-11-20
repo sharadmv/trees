@@ -8,6 +8,7 @@ class MetropolisHastingsSampler(object):
         self.tree = tree
         self.X = X
         self.last_move = None
+        self.likelihoods = []
 
     def initialize_assignments(self):
         self.tree.initialize_from_data(self.X)
@@ -23,27 +24,30 @@ class MetropolisHastingsSampler(object):
 
         node = tree.choice()
         old_assignment = tree.get_assignment(node.parent)
-        parent = node.detach()
+        old_index, old_state = old_assignment
+        subtree = node.detach()
 
         backward_likelihood = tree.log_prob_assignment(old_assignment)
         logging.debug("Backward Likelihood: %f" % backward_likelihood)
 
         points = set()
         if len(tree.constraints) > 0:
-            points = parent.points()
+            points = subtree.points()
 
         time = float('inf')
 
         try_counter = 0
-        while time > parent.children[0].get_state('time'):
+        while time > subtree.get_state('time'):
             (assignment, forward_likelihood) = tree.sample_assignment(constraints=tree.constraints,
-                                                                    points=points)
-            (index, time) = assignment
+                                                                      points=points,
+                                                                      state=old_state)
+            (index, state) = assignment
+            time = state['time']
             try_counter += 1
             if try_counter > 500:
                 return
 
-        tree.assign_node(parent, assignment)
+        tree.assign_node(subtree, assignment)
         new_likelihood = tree.marg_log_likelihood()
 
         logging.debug("New Marginal Likelihood: %f" % old_likelihood)
@@ -61,4 +65,4 @@ class MetropolisHastingsSampler(object):
 
     def sample(self):
         random.choice([self.parent_move, self.update_latent])()
-
+        self.likelihoods.append(self.tree.marg_log_likelihood())

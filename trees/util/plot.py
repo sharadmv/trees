@@ -13,7 +13,7 @@ def plot_tree(tree, mpld3=False, ax=None, y=None):
                 add_nodes(child)
 
     add_nodes(tree.root)
-    fig, ax = plt.subplots(1, 1)
+    fig = plt.gcf()
     pos = nx.graphviz_layout(g, prog='dot', args='-Granksep=100.0')
     labels = {n: tree.node_as_string(n) if not n.is_leaf() else str(n.point) for n in g.nodes()}
     node_size = [120 if n.is_leaf() else 40 for n in g.nodes()]
@@ -23,7 +23,7 @@ def plot_tree(tree, mpld3=False, ax=None, y=None):
                             alpha=0.8, ax=ax)
     nx.draw_networkx_edges(g, pos,
                             alpha=0.8, arrows=False, ax=ax)
-    node_labels = nx.draw_networkx_labels(g, pos, labels, font_size=10, font_color='r', ax=ax)
+    nx.draw_networkx_labels(g, pos, labels, font_size=10, font_color='r', ax=ax)
     if mpld3:
         labels = []
         for node in g.nodes_iter():
