@@ -15,15 +15,25 @@ class DirichletDiffusionTree(Tree):
         N, _ = X.shape
         points = set(xrange(N))
         super(DirichletDiffusionTree, self).initialize_assignments(points)
-        for node in self.dfs():
-            if node.is_root():
-                node.set_state('time', 0.0)
-                node.set_state('latent_value', self.likelihood_model.mu0)
+        self.reconfigure_subtree(self.root, X)
+
+    def reconfigure_subtree(self, root, X):
+        if root.is_root():
+            root_time = 0.0
+        else:
+            root_time = root.get_state('time')
+        for node in self.dfs(node=root):
+            if node == root:
+                node.set_state('time', root_time)
+                node.set_state('latent_value', sum(n.get_state('latent_value') for n in node.children) /
+                               float(len(node.children)))
             elif node.is_leaf():
                 node.set_state('time', 1.0)
                 node.set_state('latent_value', X[node.point].ravel())
             else:
-                node.set_state('time', min(n.get_state('time') for n in node.children) / 2.0)
+                min_time = min(n.get_state('time') for n in node.children)
+                new_time = min_time - (min_time - root_time) / 2.0
+                node.set_state('time', new_time)
                 node.set_state('latent_value', sum(n.get_state('latent_value') for n in node.children) /
                                float(len(node.children)))
 

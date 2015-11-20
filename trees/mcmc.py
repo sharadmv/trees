@@ -12,6 +12,9 @@ class MetropolisHastingsSampler(object):
     def initialize_assignments(self):
         self.tree.initialize_from_data(self.X)
 
+    def add_constraint(self, constraint):
+        self.tree.add_constraint(constraint, self.X)
+
     def parent_move(self):
         tree = self.tree.copy()
 

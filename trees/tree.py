@@ -9,9 +9,9 @@ from tqdm import tqdm
 
 class Tree(object):
 
-    def __init__(self, root=None, constraints=[], **params):
+    def __init__(self, root=None, constraints=set(), **params):
         self.root = root
-        self.constraints = constraints
+        self.constraints = set(constraints)
         self.parameters = {}
         for param in self.get_parameters():
             assert param in params, "Missing parameter: %s" % param
@@ -25,6 +25,18 @@ class Tree(object):
 
     def initialize_assignments(self, points):
         self.root = TreeNode.construct(points, self.constraints)
+
+    def add_constraint(self, constraint, X):
+        self.constraints.add(constraint)
+        a, b, c = constraint
+        an, bn, cn = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
+        subtree_root = self.mrca(an, self.mrca(bn, cn))
+        print "Receiving constraint: ", constraint, subtree_root.get_index()
+        subtree_root.reconfigure(self.constraints)
+        self.reconfigure_subtree(subtree_root, X)
+
+    def reconfigure_subtree(self, subtree):
+        pass
 
     def set_root(self, root):
         self.root = root
@@ -153,6 +165,13 @@ class TreeNode(object):
 
     def get_state(self, key):
         return self.state[key]
+
+    def reconfigure(self, constraints):
+        points = self.points()
+        new_node = TreeNode.construct(points, constraints)
+        self.children = new_node.children[:]
+        for child in self.children:
+            child.set_parent(self)
 
     @staticmethod
     def construct_constraint_graph(points, constraints):
