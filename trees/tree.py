@@ -270,7 +270,6 @@ class TreeNode(object):
         assert first < len(self.children)
         return self.children[first].get_node(rest)
 
-    @tree_cache("point_index")
     def point_index(self, point, index=()):
         for i, child in enumerate(self.children):
             if point in child.points():
@@ -323,7 +322,6 @@ class TreeNode(object):
         """
         assert self.parent is not None, "Cannot detach root node"
         if self.parent.is_root():
-            assert False, "Cannot detach depth 1 node"
             parent = self.parent
             parent.remove_child(self)
             assert len(parent.children) == 1
