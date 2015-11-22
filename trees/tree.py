@@ -35,7 +35,7 @@ class Tree(object):
     def add_constraint(self, constraint, X):
         constraints = set(self.constraints)
         constraints.add(constraint)
-        self.constraints = frozenset(self.constraints)
+        self.constraints = frozenset(constraints)
         a, b, c = constraint
         an, bn, cn = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
         subtree_root = self.mrca(an, self.mrca(bn, cn))
@@ -240,14 +240,14 @@ class TreeNode(object):
     def prune_constraints(self, constraints, points, idx):
         choice_points = self.children[idx].points()
         other_points = self.points() - choice_points
-        new_constraints = set()
+        new_constraints = set(constraints)
         for constraint in constraints:
             a, b, c = constraint
-            if a in points and b in choice_points and c in other_points:
+            if not (a in points and b in choice_points and c in other_points):
                 continue
-            if b in points and a in choice_points and c in other_points:
+            if not (b in points and a in choice_points and c in other_points):
                 continue
-            new_constraints.add(constraint)
+            new_constraints.remove(constraint)
 
         return frozenset(new_constraints)
 

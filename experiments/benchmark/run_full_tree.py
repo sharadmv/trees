@@ -28,7 +28,7 @@ random.shuffle(master_constraints)
 
 train_percentage = 0.01
 
-training_size = int(0.01 * len(master_constraints))
+training_size = int(0.2 * len(master_constraints))
 
 train_constraints, test_constraints = master_constraints[:training_size], master_constraints[training_size:]
 
@@ -42,13 +42,13 @@ model = DirichletDiffusionTree(df=df, likelihood_model=lm, constraints=train_con
 sampler = MetropolisHastingsSampler(model, X)
 sampler.initialize_assignments()
 
-n_iters = 10000
+n_iters = 1000
 
 scores = []
 for i in tqdm(xrange(n_iters)):
     sampler.sample()
-    scores.append(float(sampler.tree.score_constraints(test_constraints))
-                        / len(test_constraints))
+    #scores.append(float(sampler.tree.score_constraints(test_constraints))
+                        #/ len(test_constraints))
 
 fontsize = 18
 plt.figure()

@@ -37,9 +37,9 @@ model = DirichletDiffusionTree(df=df, likelihood_model=lm, constraints=[])
 sampler = MetropolisHastingsSampler(model, X)
 sampler.initialize_assignments()
 
-constraint_add = 200
+constraint_add = 1
 constraint_index = 0
-n_iters = 40000
+n_iters = 200
 
 likelihoods = []
 scores = []
