@@ -13,7 +13,7 @@ class Tree(object):
 
     def __init__(self, root=None, constraints=set(), **params):
         self.root = root
-        self.constraints = set(constraints)
+        self.constraints = frozenset(constraints)
         self.parameters = {}
         for param in self.get_parameters():
             assert param in params, "Missing parameter: %s" % param
@@ -31,8 +31,11 @@ class Tree(object):
     def initialize_assignments(self, points):
         self.root = TreeNode.construct(points, self.constraints)
 
+
     def add_constraint(self, constraint, X):
-        self.constraints.add(constraint)
+        constraints = set(self.constraints)
+        constraints.add(constraint)
+        self.constraints = frozenset(self.constraints)
         a, b, c = constraint
         an, bn, cn = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
         subtree_root = self.mrca(an, self.mrca(bn, cn))
@@ -232,21 +235,21 @@ class TreeNode(object):
         node.add_child(right_node)
         return node
 
+
+    @tree_cache("prune_constraints")
     def prune_constraints(self, constraints, points, idx):
         choice_points = self.children[idx].points()
-        other_points = reduce(lambda x, y: x | y,
-                              (c.points() for i, c in enumerate(self.children) if i != idx)
-                              )
-        new_constraints = []
+        other_points = self.points() - choice_points
+        new_constraints = set()
         for constraint in constraints:
             a, b, c = constraint
             if a in points and b in choice_points and c in other_points:
                 continue
             if b in points and a in choice_points and c in other_points:
                 continue
-            new_constraints.append(constraint)
+            new_constraints.add(constraint)
 
-        return new_constraints
+        return frozenset(new_constraints)
 
     def copy(self):
         node = TreeNode(
@@ -305,7 +308,7 @@ class TreeNode(object):
 
     @tree_cache("points")
     def points(self):
-        return reduce(set.union, (c.points() for c in self.children), set())
+        return reduce(frozenset.union, (c.points() for c in self.children), frozenset())
 
     @tree_cache("nodes")
     def nodes(self):
@@ -355,6 +358,8 @@ class TreeNode(object):
         parent.add_child(new_parent)
         new_parent.make_dirty()
 
+
+    @tree_cache("is_path_banned")
     def is_path_banned(self, constraints, points):
         my_points = self.points()
 
@@ -377,6 +382,8 @@ class TreeNode(object):
         if self.parent is not None:
             self.parent.make_dirty()
 
+
+    @tree_cache("is_path_required")
     def is_path_required(self, constraints, points):
         my_points = self.points()
 
@@ -392,6 +399,7 @@ class TreeNode(object):
                         return True
         return False
 
+    @tree_cache("is_required")
     def is_required(self, constraints, points):
         my_points = self.points()
         for constraint in constraints:
@@ -402,6 +410,7 @@ class TreeNode(object):
                 return True
         return False
 
+    @tree_cache("is_banned")
     def is_banned(self, constraints, points):
         for idx, child in enumerate(self.children):
             child_points = child.points()
@@ -439,7 +448,7 @@ class TreeLeaf(TreeNode):
         return index
 
     def points(self):
-        return {self.point}
+        return frozenset({self.point})
 
     def node_count(self):
         return 1

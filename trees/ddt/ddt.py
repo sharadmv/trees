@@ -74,7 +74,7 @@ class DirichletDiffusionTree(Tree):
                           state=None):
         node = node or self.root
         constraints = constraints or self.constraints
-        points = points or set()
+        points = points or frozenset()
         index = index or ()
         df = self.df
 
@@ -86,28 +86,31 @@ class DirichletDiffusionTree(Tree):
         logging.debug("Path counts: %s" % str(counts))
         total = float(sum(counts))
 
-        for idx, child in enumerate(node.children):
-            if child.is_required(constraints, points):
-                constraints = node.prune_constraints(constraints, points, idx)
-                logging.debug("Child is required: %u" % idx)
-                return self.sample_assignment(node=node.children[idx],
-                                              constraints=constraints,
-                                              points=points,
-                                              index=index + (idx,),
-                                              state=state)
+        if len(constraints) > 0:
+            for idx, child in enumerate(node.children):
+                if child.is_required(constraints, points):
+                    constraints = node.prune_constraints(constraints, points, idx)
+                    logging.debug("Child is required: %u" % idx)
+                    return self.sample_assignment(node=node.children[idx],
+                                                constraints=constraints,
+                                                points=points,
+                                                index=index + (idx,),
+                                                state=state)
         left_prob = counts[0] / total
         u = np.random.random()
         choice = None
+        idx = -1
 
-        for i, child in enumerate(node.children):
-            if child.is_path_required(constraints, points):
-                idx = i
-                choice = child
-                break
-            if child.is_path_banned(constraints, points):
-                idx = 1 - i
-                choice = node.children[idx]
-                break
+        if len(constraints) > 0:
+            for i, child in enumerate(node.children):
+                if child.is_path_required(constraints, points):
+                    idx = i
+                    choice = child
+                    break
+                if child.is_path_banned(constraints, points):
+                    idx = 1 - i
+                    choice = node.children[idx]
+                    break
 
         if choice is None:
             if u < left_prob:
@@ -124,10 +127,8 @@ class DirichletDiffusionTree(Tree):
         choice_time = choice.get_state('time')
 
         if choice.is_banned(constraints, points):
-            logging.debug("Child is banned")
             sampled_time, _ = df.sample(node_time, choice_time, counts[idx])
             diverge_prob = df.log_pdf(node_time, sampled_time, counts[idx])
-            logging.debug("Diverging at %f: %f" % (sampled_time, diverge_prob))
             prob += diverge_prob
             state['time'] = sampled_time
             return (index + (idx,), state), prob
