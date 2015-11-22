@@ -109,7 +109,7 @@ class Tree(object):
 
     def remove_point(self, i):
         node = self.get_node(self.point_index(i))
-        node.detach()
+        return node.detach()
 
     def induced_subtree(self, points):
         subtree = self.copy()
@@ -123,11 +123,7 @@ class Tree(object):
         return all(self.verify_constraint(c) for c in constraints)
 
     def score_constraints(self, constraints):
-        score = 0
-        for constraint in constraints:
-            score += self.verify_constraint(constraint)
-        return score
-        # return sum(self.verify_constraint(c) for c in constraints)
+        return sum(self.verify_constraint(c) for c in constraints)
 
     def marg_log_likelihood(self):
         raise NotImplementedError
