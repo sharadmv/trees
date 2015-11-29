@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
+from sqlalchemy import create_engine, Column, Integer
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -17,7 +17,7 @@ class SqlSession(object):
 class Database(object):
 
     def __init__(self, location):
-        self.engine_string = "sqlite:///%s" % location
+        self.engine_string = "sqlite:///%s.db" % location
         self.engine = create_engine(self.engine_string)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
@@ -28,7 +28,9 @@ class Database(object):
     def get_interactions(self):
         with self.session() as session:
             interactions= session.query(Interaction).all()
-        return interactions
+        return [
+            (i.a, i.b, i.c, i.oou) for i in interactions
+        ]
 
     def add_interaction(self, interaction):
         a, b, c, oou = interaction
@@ -36,7 +38,6 @@ class Database(object):
             interaction = Interaction(a=a, b=b, c=c, oou=oou)
             session.add(interaction)
             session.commit()
-
 
 Base = declarative_base()
 

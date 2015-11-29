@@ -11,6 +11,7 @@ class DirichletDiffusionTree(Tree):
         self._marg_log_likelihood = None
 
     def initialize_from_data(self, X):
+        logging.debug("Initializing tree from data...")
         X = np.array(X)
         N, _ = X.shape
         points = set(xrange(N))

@@ -37,9 +37,9 @@ model = DirichletDiffusionTree(df=df, likelihood_model=lm, constraints=[])
 sampler = MetropolisHastingsSampler(model, X)
 sampler.initialize_assignments()
 
-constraint_add = 1
+constraint_add = 200
 constraint_index = 0
-n_iters = 200
+n_iters = 40000
 
 likelihoods = []
 scores = []
@@ -70,5 +70,3 @@ plt.plot(likelihoods)
 plt.legend(loc='best', fontsize=12)
 
 plt.savefig('online-likelihoods.png', bbox_inches='tight')
-
-plt.show()

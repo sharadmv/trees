@@ -1,23 +1,19 @@
 import random
 import numpy as np
-from itertools import combinations
 
 class Interactor(object):
 
-    def __init__(self, X, y, database, interactor=lambda x, y: y):
-        self.X = X
-        self.y = y
+    def __init__(self, dataset, database, subset=None):
+        self.dataset = dataset
+        self.X = dataset.X
+        self.y = dataset.y
         self.N, self.D = self.X.shape
         self.database = database
-        self.idx = np.arange(self.N)
-        self.interactor = interactor
-        self.interactions = map(self.convert_interaction, self.database.get_interactions())
-
-    def generate_constraints(self):
-        return combinations(self.idx, 3)
+        self.idx = np.array(subset) if subset is not None else np.arange(self.N)
+        self.current_interactions = set(map(self.convert_interaction, self.database.get_interactions()))
 
     def convert_interaction(self, interaction):
-        a, b, c, oou = interaction.a, interaction.b, interaction.c, interaction.oou
+        a, b, c, oou = interaction
         if oou == 0:
             return (b, c, a)
         if oou == 1:
@@ -25,17 +21,25 @@ class Interactor(object):
         if oou == 2:
             return (a, b, c)
 
-    def get_interaction(self):
-        constraints = list(self.constraints)
-        constraint = random.choice(constraints)
-        return {
-            i: self.interactor(self.X[i], self.y[i]) for i in constraint
-        }
+    def sample_interaction(self):
+        a, b, c = random.choice(self.idx), random.choice(self.idx), random.choice(self.idx)
 
-    @property
-    def constraints(self):
-        return self.possible_constraints - self.existing_constraints
+        if ((a, b, c) not in self.current_interactions and
+            (a, c, b) not in self.current_interactions and
+            (b, c, a) not in self.current_interactions and
+            (b, a, c) not in self.current_interactions and
+            (c, b, a) not in self.current_interactions and
+            (c, a, b) not in self.current_interactions):
+            return (a, b, c)
+        else:
+            return self.sample_interaction()
+
+    def convert_data(self, i):
+        return self.dataset.convert(i)
 
     def add_interaction(self, a, b, c, oou):
-        self.database.add_interaction((a, b, c, oou))
-        self.existing_constraints |= {(a, b, c)}
+        interaction = (a, b, c, oou)
+        converted = self.convert_interaction(interaction)
+        if converted not in self.current_interactions:
+            self.database.add_interaction(interaction)
+            self.current_interactions |= {converted}

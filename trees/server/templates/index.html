@@ -3,9 +3,9 @@
 {% block body %}
   <script src='/js/index.js'></script>
   <link href="/css/index.css" rel="stylesheet"/>
-  <script src='/js/trees.js'></script>
-  <script src='/lib/mpld3/d3.v3.min.js'></script>
-  <script src='/lib/mpld3/mpld3.v0.2.min.js'></script>
+  <!--<script src='/js/trees.js'></script>-->
+  <script src='/js/d3.v3.min.js'></script>
+  <script src='/js/mpld3.v0.2.min.js'></script>
   <link href="/css/trees.css" rel="stylesheet"/>
   <div class='panel panel-default' style='margin-top: 10px'>
     <div class='panel-heading'>Interaction</div>
@@ -30,34 +30,6 @@
       <div class='row' style='padding-top: 5px;'>
         <div class='col-lg-4 col-centered col-lg-offset-4'>
           <button class='btn btn-danger' id='noidea'>No Idea</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class='panel panel-default'>
-    <div class='panel-heading'>Current Trees
-      <button class='btn btn-success' id='refresh'>Refresh</button>
-      <button class='btn btn-info' id='save'>Save</button>
-    </div>
-    <div class='panel-body'>
-      <div class="row">
-        <div class='col-lg-6'>
-          <label>TSSB</label>
-          <div id='tssb'></div>
-        </div>
-        <div class='col-lg-6'>
-          <label>iTSSB</label>
-          <div id='itssb'></div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class='panel panel-default'>
-    <div class='panel-heading'>Current Likelihoods</div>
-    <div class='panel-body'>
-      <div class="row">
-        <div class='col-lg-12'>
-          <div id='ll'></div>
         </div>
       </div>
     </div>

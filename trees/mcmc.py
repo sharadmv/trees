@@ -17,6 +17,7 @@ class MetropolisHastingsSampler(object):
         self.tree.add_constraint(constraint, self.X)
 
     def parent_move(self):
+        logging.debug("Copying tree...")
         tree = self.tree.copy()
 
         old_likelihood = self.tree.marg_log_likelihood()
@@ -41,6 +42,7 @@ class MetropolisHastingsSampler(object):
             (assignment, forward_likelihood) = tree.sample_assignment(constraints=tree.constraints,
                                                                       points=points,
                                                                       state=old_state)
+            logging.debug("Candidate assignment: %s", str(assignment))
             (index, state) = assignment
             time = state['time']
             try_counter += 1

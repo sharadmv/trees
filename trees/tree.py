@@ -240,14 +240,14 @@ class TreeNode(object):
     def prune_constraints(self, constraints, points, idx):
         choice_points = self.children[idx].points()
         other_points = self.points() - choice_points
-        new_constraints = set(constraints)
+        new_constraints = set()
         for constraint in constraints:
             a, b, c = constraint
-            if not (a in points and b in choice_points and c in other_points):
+            if a in points and b in choice_points and c in other_points:
                 continue
-            if not (b in points and a in choice_points and c in other_points):
+            if b in points and a in choice_points and c in other_points:
                 continue
-            new_constraints.remove(constraint)
+            new_constraints.add(constraint)
 
         return frozenset(new_constraints)
 
