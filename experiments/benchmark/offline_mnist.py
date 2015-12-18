@@ -45,7 +45,7 @@ if subset_path.exists():
         idx = pickle.load(fp)
 else:
     np.random.seed(1337)
-    idx = np.random.permutation(idx)[:10000]
+    idx = np.random.permutation(idx)[:1000]
     with open(subset_path, 'wb') as fp:
         pickle.dump(idx, fp)
 

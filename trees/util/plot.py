@@ -38,13 +38,21 @@ def plot_tree(tree, mpld3=False, ax=None, y=None):
         plt.axis('off')
         return fig
 
-def plot_tree_2d(tree, X):
-    plt.scatter(*X.T)
+def plot_tree_2d(tree, X, pca=None):
+    plt.scatter(*pca.transform(X).T)
     def plot_node(node, size=40):
         if node.is_leaf():
             return
-        plt.scatter(*node.get_state('latent_value'), color='g', alpha=0.5, s=size)
+        if pca is not None:
+            lv = pca.transform(node.get_state('latent_value')).ravel()
+        else:
+            lv = node.get_state('latent_value')
+        plt.scatter(*lv, color='g', alpha=0.5, s=size)
         for child in node.children:
-            plt.plot(*zip(node.get_state('latent_value'), child.get_state('latent_value')), color='g', alpha=0.2)
+            if pca is not None:
+                clv = pca.transform(child.get_state('latent_value')).ravel()
+            else:
+                clv = child.get_state('latent_value')
+            plt.plot(*zip(lv, clv), color='g', alpha=0.2)
             plot_node(child, size=size/2.0)
     plot_node(tree.root)

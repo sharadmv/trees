@@ -6,6 +6,8 @@ import numpy as np
 from functools import reduce
 from itertools import combinations
 from tqdm import tqdm
+from Bio import Phylo
+from cStringIO import StringIO
 
 from util import tree_cache
 
@@ -36,11 +38,12 @@ class Tree(object):
         constraints = set(self.constraints)
         constraints.add(constraint)
         self.constraints = frozenset(constraints)
-        a, b, c = constraint
-        an, bn, cn = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
-        subtree_root = self.mrca(an, self.mrca(bn, cn))
-        subtree_root.reconfigure(self.constraints)
-        self.reconfigure_subtree(subtree_root, X)
+        if not self.verify_constraint(constraint):
+            a, b, c = constraint
+            an, bn, cn = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
+            subtree_root = self.mrca(an, self.mrca(bn, cn))
+            subtree_root.reconfigure(self.constraints)
+            self.reconfigure_subtree(subtree_root, X)
 
     def reconfigure_subtree(self, subtree):
         pass
@@ -56,7 +59,7 @@ class Tree(object):
     def node_as_string(self, node):
         return str(node.state)
 
-    def choice(self):
+    def choice(self, ignore=True):
         """
         Uses reservoir sampling to pick a node from a tree uniformly at random,
         ignoring nodes that are depth 0 and 1.
@@ -64,7 +67,9 @@ class Tree(object):
         choice = None
         i = 0
         for node in self.dfs():
-            if node.parent is None or node.parent.parent is None:
+            if node.parent is None:
+                continue
+            if ignore and node.parent.parent is None:
                 continue
             p = i / (i + 1.0)
             if np.random.random() > p:
@@ -158,6 +163,15 @@ class Tree(object):
             b = b.parent
         return b
 
+    def to_newick(self):
+        return self.root.to_newick()
+
+    @staticmethod
+    def from_newick(newick):
+        phylo = Phylo.read(StringIO(newick), 'newick')
+        root = TreeNode.from_phylo(phylo.root)
+        return Tree(root=root)
+
 class TreeNode(object):
 
     def __init__(self, state=None):
@@ -174,7 +188,10 @@ class TreeNode(object):
 
     def set_cache(self, key, value):
         self.cache[key] = value
-        pass
+
+    def delete_cache(self, key):
+        if key in self.cache:
+            del self.cache[key]
 
     def get_cache(self, key):
         return self.cache[key]
@@ -387,16 +404,24 @@ class TreeNode(object):
     def is_path_required(self, constraints, points):
         my_points = self.points()
 
-        for point in points:
-            for constraint in constraints:
-                a, b, c = constraint
+        for constraint in constraints:
+            a, b, c = constraint
 
-                if a == point:
-                    if b in my_points:
-                        return True
-                elif b == point:
-                    if a in my_points:
-                        return True
+            if a in points and b in my_points:
+                return True
+            if b in points and a in my_points:
+                return True
+
+        # for point in points:
+            # for constraint in constraints:
+                # a, b, c = constraint
+
+                # if a == point:
+                    # if b in my_points:
+                        # return True
+                # elif b == point:
+                    # if a in my_points:
+                        # return True
         return False
 
     @tree_cache("is_required")
@@ -423,6 +448,27 @@ class TreeNode(object):
                                     (a in child_points and b in other_points)):
                     return True
         return False
+
+    def to_newick(self):
+        children = [c.to_newick() for c in self.children]
+        if 'time' in self.state:
+            times = [c.get_state('time') - self.get_state('time') for c in self.children]
+            children = [':'.join(map(str, c)) for c in zip(children, times)]
+        return "(%s)" % ','.join(children)
+
+    @staticmethod
+    def from_phylo(phylo, time=0):
+        branch_length = phylo.branch_length or 0
+        if phylo.is_terminal():
+            return TreeLeaf(int(phylo.name), state={
+                'time': branch_length + time
+            })
+        children = map(lambda c: TreeNode.from_phylo(c, time=branch_length + time), phylo.clades)
+        node = TreeNode(state={
+            'time': time
+        })
+        node.children = children
+        return node
 
 class TreeLeaf(TreeNode):
     def __init__(self, point, state=None):
@@ -461,6 +507,9 @@ class TreeLeaf(TreeNode):
 
     def is_banned(self, points, constraints):
         return True
+
+    def to_newick(self):
+        return self.point
 
 class MCMCSampler(object):
 

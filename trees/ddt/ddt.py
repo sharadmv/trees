@@ -200,6 +200,7 @@ class DirichletDiffusionTree(Tree):
             if not node.is_leaf():
                 lv = self.likelihood_model.sample_transition(node, node.parent)
                 node.set_state('latent_value', lv)
+                node.delete_cache("likelihood")
 
     def node_as_string(self, node):
         return str(node.get_state('time'))
