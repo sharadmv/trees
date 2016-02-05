@@ -1,5 +1,8 @@
 from path import Path
-from sklearn.datasets import fetch_mldata
+from sklearn.datasets import fetch_mldata, fetch_20newsgroups
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn import datasets as dt
+from scipy.io import loadmat
 import numpy as np
 import matplotlib.pyplot as plt, mpld3
 
@@ -16,10 +19,11 @@ def datasets():
     return {
         'zoo',
         'awa',
-        'mnist'
+        'mnist',
+        '20news'
     }
 
-class AnimalDataset(object):
+class MatrixDataset(object):
 
     def __init__(self, X, y):
         self.X = X
@@ -62,7 +66,7 @@ def load_zoo(data_dir):
             y.append(line[0])
     X = np.array(X)
     _, D = X.shape
-    return AnimalDataset(X, y)
+    return MatrixDataset(X, y)
 
 def load_awa(data_dir):
     DATA_DIR = data_dir / "awa"
@@ -75,7 +79,7 @@ def load_awa(data_dir):
             line = line.strip()
             row = line.split()
             animal_map.append(row[1])
-    return AnimalDataset(X, animal_map)
+    return MatrixDataset(X, animal_map)
 
 def load_mnist(data_dir):
     DATA_DIR = data_dir / "mnist"
@@ -83,8 +87,26 @@ def load_mnist(data_dir):
     X, y = mnist['data'], mnist['target']
     return ImageDataset(X, y, (28, 28))
 
+def load_iris(data_dir):
+    iris = dt.load_iris()
+    X, y = iris.data, iris.target
+    return MatrixDataset(X, y)
+
+def load_news(data_dir):
+    data_dir = data_dir / '20news'
+    data = loadmat(data_dir / 'data.mat')
+    return MatrixDataset(data['X'], data['y'][0])
+    newsgroups_train = fetch_20newsgroups()
+    count_vectorizer = CountVectorizer(min_df=1)
+    np.random.seed(0)
+    X = count_vectorizer.fit_transform(newsgroups_train.data)
+    idx = np.random.permutation(np.arange(X.shape[0]))[:1000]
+    return MatrixDataset(X[idx], np.array(newsgroups_train.target)[idx])
+
 DATASET_LOADERS = {
     'zoo': load_zoo,
     'awa': load_awa,
-    'mnist': load_mnist
+    'mnist': load_mnist,
+    'iris': load_iris,
+    '20news': load_news,
 }

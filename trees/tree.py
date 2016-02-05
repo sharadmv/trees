@@ -20,6 +20,13 @@ class Tree(object):
         for param in self.get_parameters():
             assert param in params, "Missing parameter: %s" % param
             self.parameters[param] = params[param]
+        self._all_constraints = None
+
+    def get_state(self):
+        return self.root
+
+    def set_state(self, state):
+        self.root = state
 
     def leaf(self, *args, **kwargs):
         return TreeLeaf(*args, **kwargs)
@@ -45,7 +52,7 @@ class Tree(object):
             subtree_root.reconfigure(self.constraints)
             self.reconfigure_subtree(subtree_root, X)
 
-    def reconfigure_subtree(self, subtree):
+    def reconfigure_subtree(self, subtree, X):
         pass
 
     def set_root(self, root): self.root = root
@@ -93,27 +100,34 @@ class Tree(object):
         yield node
 
     def generate_constraints(self):
-        points = self.root.points()
-        combos = list(combinations(points, 3))
-        constraints = set()
-        for (a, b, c) in tqdm(combos):
-            (an, bn, cn) = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
-            a_b = self.mrca(an, bn)
-            a_c = self.mrca(an, cn)
-            b_c = self.mrca(bn, cn)
-            if a_b == a_c:
-                constraints.add((b, c, a))
-            elif b_c == a_b:
-                constraints.add((a, c, b))
-            elif a_c == b_c:
-                constraints.add((a, b, c))
-        return constraints
+        if self._all_constraints is None:
+            points = self.root.points()
+            combos = list(combinations(points, 3))
+            constraints = set()
+            for (a, b, c) in tqdm(combos):
+                (an, bn, cn) = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
+                a_b = self.mrca(an, bn)
+                a_c = self.mrca(an, cn)
+                b_c = self.mrca(bn, cn)
+                if a_b == a_c == b_c:
+                    continue
+                if a_b == a_c:
+                    constraints.add((b, c, a))
+                elif b_c == a_b:
+                    constraints.add((a, c, b))
+                elif a_c == b_c:
+                    constraints.add((a, b, c))
+            self._all_constraints = constraints
+        return self._all_constraints
 
     def verify_constraint(self, constraint):
         (a, b, c) = constraint
         (a, b, c) = map(lambda p: self.get_node(self.point_index(p)), (a, b, c))
         mrca = self.mrca(a, b)
         return mrca != self.mrca(mrca, c)
+
+    def points(self):
+        return self.root.points()
 
     def remove_point(self, i):
         node = self.get_node(self.point_index(i))
@@ -252,6 +266,20 @@ class TreeNode(object):
         node.add_child(right_node)
         return node
 
+    def induce(self, points):
+        if self.is_leaf():
+            if self.points() != points:
+                raise Exception('wat')
+            return self
+        for i in xrange(len(self.children)):
+            d = points & self.children[i].points()
+            if len(d) == len(points):
+                return self.children[i].induce(points)
+            elif len(d) != 0:
+                self.children[i] = self.children[i].induce(d)
+            else:
+                return self.children[1 - i].induce(points)
+        return self
 
     @tree_cache("prune_constraints")
     def prune_constraints(self, constraints, points, idx):
@@ -454,7 +482,7 @@ class TreeNode(object):
         if 'time' in self.state:
             times = [c.get_state('time') - self.get_state('time') for c in self.children]
             children = [':'.join(map(str, c)) for c in zip(children, times)]
-        return "(%s)" % ','.join(children)
+        return "(%s)" % ','.join(map(str, children))
 
     @staticmethod
     def from_phylo(phylo, time=0):

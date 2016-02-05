@@ -6,3 +6,4 @@ from . import data
 from . import ddt
 from . import util
 from . import dasgupta
+from . import constraint
